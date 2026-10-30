@@ -9,7 +9,16 @@ import { easeInOut, easeOut, hash, lerp, rng, shiftHue, smooth, speech, TAU, win
 import { TURN_DURATION, TURNS, voiceAt, VOICES } from "./shared";
 
 type RGB = readonly number[];
-const mix3 = (a: RGB, b: RGB, t: number): number[] => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+/**
+ * Blend two colours into a shared scratch triple: thousands of dots a frame would otherwise each
+ * allocate one, and the garbage shows up as stutter. Use the result at once (field.set copies it);
+ * nesting is fine, since each channel is read before it is written.
+ */
+const MIX: number[] = [0, 0, 0];
+const mix3 = (a: RGB, b: RGB, t: number): number[] => {
+  for (let i = 0; i < 3; i++) MIX[i] = lerp(a[i], b[i], t);
+  return MIX;
+};
 const params = <T extends ParamDefs>(ctx: SceneContext) => ctx.params as ParamValues<T>;
 /** inside the orb: never draw particles over its face */
 const inOrb = (x: number, y: number, z: number, R: number) => x * x + (y - R) * (y - R) + z * z < R * R * 1.02;

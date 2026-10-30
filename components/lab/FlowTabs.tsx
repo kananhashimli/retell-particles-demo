@@ -74,7 +74,7 @@ export function FlowTabs({ scene, onScene, progress, autoplay }: Props) {
                                 />
                               )}
                             </span>
-                            <span>{SCENES[id].title}</span>
+                            <span className="whitespace-nowrap">{SCENES[id].title}</span>
                             <span className="text-black/50">{SCENES[id].blurb}</span>
                           </button>
                         </li>

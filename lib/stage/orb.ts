@@ -1,7 +1,7 @@
 // Retell orb inside a 3D scene.
 //
 // Port of the Iris reference orb (iris-voice.vercel.app/orb.js): same measured waveform W, delay
-// field (delay.bin) and per-state motion. Differences:
+// field (delay.bin.gz) and per-state motion. Differences:
 //   • it draws on a camera-facing quad in world space instead of a full-screen pass;
 //   • it writes sphere depth (impostor), so objects pass in front of / behind it correctly;
 //   • voice input comes from the scene timeline (deterministic) instead of a microphone.
@@ -239,7 +239,7 @@ export class Orb {
   private time = 0;
   private varTime = 0;
   private rate = 1;
-  /** eased activity of the orb (0..1); scenes and lights read it for glow */
+  /** eased activity of the orb (0..1); the floor reads it for glow */
   energy = 0;
   /** hue turn of the current (tinted) orb from its configured colours; the lower shade follows it */
   hueShift = 0;
@@ -249,15 +249,23 @@ export class Orb {
     const tex = new THREE.DataTexture(new Uint16Array(500 * 500 * 2), 500, 500, THREE.RGFormat, THREE.HalfFloatType);
     tex.magFilter = tex.minFilter = THREE.LinearFilter;
     tex.generateMipmaps = false;
-    this.ready = fetch("/orb/delay.bin")
+    // shipped gzipped (half the size); a host may already have unzipped it on the way, so check the magic bytes
+    this.ready = fetch("/orb/delay.bin.gz")
       .then((r) => {
-        if (!r.ok) throw new Error("Could not load /orb/delay.bin");
+        if (!r.ok) throw new Error("Could not load /orb/delay.bin.gz");
         return r.arrayBuffer();
+      })
+      .then((buf) => {
+        const head = new Uint8Array(buf, 0, 2);
+        if (head[0] !== 0x1f || head[1] !== 0x8b) return buf;
+        return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
       })
       .then((buf) => {
         tex.image.data = new Uint16Array(buf);
         tex.needsUpdate = true;
-      });
+      })
+      // the orb still draws without its motion field, just without the inner swirl
+      .catch((e) => console.error(e));
 
     const v3 = (h: string) => new THREE.Vector3(...hexRGB(h));
     this.uniforms = {

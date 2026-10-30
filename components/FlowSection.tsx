@@ -16,7 +16,14 @@ export function FlowSection() {
   const [scene, setScene] = useState<SceneId>(CONFIG.scene);
 
   useEffect(() => {
-    const st = new Stage(box.current!, CONFIG);
+    let st: Stage;
+    try {
+      st = new Stage(box.current!, CONFIG);
+    } catch (e) {
+      // no WebGL: the tabs and cards still work over the plain background
+      console.error(e);
+      return;
+    }
     setStage(st);
     const offScene = st.on("scene", (id) => setScene(id));
     const offLoop = st.on("loop", (id) => st.applyConfig({ scene: SCENE_ORDER[(SCENE_ORDER.indexOf(id) + 1) % SCENE_ORDER.length] }));
@@ -29,7 +36,8 @@ export function FlowSection() {
 
   const pickScene = useCallback(
     (id: SceneId) => {
-      if (!stage || id === stage.config.scene) return;
+      if (!stage) return setScene(id);
+      if (id === stage.config.scene) return;
       stage.applyConfig({ scene: id });
     },
     [stage],

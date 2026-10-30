@@ -64,6 +64,9 @@ export class Stage {
   private dpr = 1;
   private viewH = 5;
   private ro: ResizeObserver;
+  private io: IntersectionObserver;
+  /** off screen, the stage neither animates nor draws */
+  private onScreen = true;
   private listeners: { [K in keyof StageEvents]: Set<StageEvents[K]> } = { scene: new Set(), loop: new Set() };
   private frozen = false; // exports drive frames themselves
   private morph: Morph | null = null;
@@ -87,6 +90,8 @@ export class Stage {
     this.scene.add(this.floor.mesh, this.orb.group);
 
     this.ro = new ResizeObserver(() => this.resize());
+    this.io = new IntersectionObserver(([e]) => (this.onScreen = e.isIntersecting));
+    this.io.observe(container);
     this.ro.observe(container);
     this.resize();
     this.applyConfig({}, true);
@@ -308,7 +313,7 @@ export class Stage {
     // backwards and fire "loop" at once, skipping the opening scene
     const dt = Math.max(0, Math.min((now - this.last) / 1000, 0.1));
     this.last = now;
-    if (this.frozen) return;
+    if (this.frozen || !this.onScreen) return;
     this.step(this.config.playing ? dt * this.config.speed : 0);
     this.render();
     this.onFrame?.();
@@ -583,6 +588,7 @@ export class Stage {
   dispose() {
     cancelAnimationFrame(this.raf);
     this.ro.disconnect();
+    this.io.disconnect();
     this.endMorph();
     for (const a of [...this.active]) this.disposeActive(a);
     this.orb.dispose();

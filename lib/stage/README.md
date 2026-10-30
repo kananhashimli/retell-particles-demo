@@ -4,7 +4,7 @@ An isometric room with the Retell orb standing in the middle. The **Line** direc
 
 ```
 stage.ts        renderer, iso camera, scene crossfades, exports
-orb.ts          the Iris orb shader as a depth-correct sphere impostor (needs /public/orb/delay.bin)
+orb.ts          the Iris orb shader as a depth-correct sphere impostor (needs /public/orb/delay.bin.gz)
 floor.ts        grid (lines / dots / crosses), contact shadow, orb glow pool, ripples, tiles
 kit.ts          fat lines, particles
 config.ts       defaults + deep merge
