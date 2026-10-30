@@ -13,13 +13,13 @@ export const STEPS: { id: StepId; title: string; blurb: string; scenes: SceneId[
   { id: "speak", title: "Speak", blurb: "Answer in a voice that sounds like a person on the phone, not a page being read aloud.", scenes: ["colloquial", "voices"] },
 ];
 
-export const SCENES: Record<SceneId, { step: StepId; title: string; blurb: string }> = {
-  denoise: { step: "listen", title: "Denoising", blurb: "Cancels background noise on the line" },
-  turns: { step: "listen", title: "Turn-taking", blurb: "Knows when to speak and when to stop" },
-  llm: { step: "think", title: "Retell LLM", blurb: "Text model built for live calls" },
-  flow: { step: "think", title: "Conversation flow", blurb: "Checks outcomes, moves the call forward" },
-  colloquial: { step: "speak", title: "Colloquial", blurb: "Makes replies sound spoken, not written" },
-  voices: { step: "speak", title: "Retell voices", blurb: "Retell's own text to speech" },
+export const SCENES: Record<SceneId, { step: StepId; title: string }> = {
+  denoise: { step: "listen", title: "Denoising" },
+  turns: { step: "listen", title: "Turn-taking" },
+  llm: { step: "think", title: "Retell LLM" },
+  flow: { step: "think", title: "Conversation flow" },
+  colloquial: { step: "speak", title: "Colloquial" },
+  voices: { step: "speak", title: "Retell voices" },
 };
 
 export const SCENE_ORDER: SceneId[] = ["denoise", "turns", "llm", "flow", "colloquial", "voices"];

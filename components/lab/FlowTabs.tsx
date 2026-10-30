@@ -38,7 +38,7 @@ export function FlowTabs({ scene, onScene, progress, autoplay }: Props) {
                 type="button"
                 onClick={() => onScene(s.scenes[0])}
                 disabled={open}
-                className={`group flex w-full items-center gap-4 pb-5 text-left ${open ? "cursor-default" : "cursor-pointer"} ${i > 0 ? "pt-7" : ""}`}
+                className={`group flex w-full items-center gap-4 pb-4 text-left md:pb-5 ${open ? "cursor-default" : "cursor-pointer"} ${i > 0 ? "pt-5 md:pt-7" : ""}`}
                 aria-expanded={open}
               >
                 <span
@@ -52,8 +52,8 @@ export function FlowTabs({ scene, onScene, progress, autoplay }: Props) {
               </button>
               <div className={`grid transition-[grid-template-rows] duration-500 ease-[cubic-bezier(.2,.7,.2,1)] ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
                 <div className="overflow-hidden" inert={!open}>
-                  <p className="max-w-[327px] pb-4 text-[14px] leading-[19px] tracking-[-0.01em] text-black/50">{s.blurb}</p>
-                  <ul className="pb-[17px]">
+                  <p className="max-w-[327px] pb-3 text-[14px] md:pb-4 leading-[19px] tracking-[-0.01em] text-black/50">{s.blurb}</p>
+                  <ul className="pb-3 md:pb-[17px]">
                     {s.scenes.map((id) => {
                       const on = id === scene;
                       return (
@@ -63,9 +63,9 @@ export function FlowTabs({ scene, onScene, progress, autoplay }: Props) {
                             onClick={() => onScene(id)}
                             disabled={on}
                             aria-current={on ? "step" : undefined}
-                            className={`relative flex w-full ${on ? "cursor-default" : "cursor-pointer"} items-baseline gap-3 py-2 pl-4 text-left text-[14px] leading-[19px] tracking-[-0.01em] transition-colors ${on ? "text-black" : "text-black/50 hover:text-black"}`}
+                            className={`relative flex w-full ${on ? "cursor-default" : "cursor-pointer"} items-baseline gap-3 py-1.5 pl-4 md:py-2 text-left text-[14px] leading-[19px] tracking-[-0.01em] transition-colors ${on ? "text-black" : "text-black/50 hover:text-black"}`}
                           >
-                            <span className="absolute left-0 top-2 bottom-2 w-[2px] overflow-hidden rounded bg-line">
+                            <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] md:top-2 md:bottom-2 overflow-hidden rounded bg-line">
                               {on && (
                                 <span
                                   ref={bar}
@@ -75,7 +75,6 @@ export function FlowTabs({ scene, onScene, progress, autoplay }: Props) {
                               )}
                             </span>
                             <span className="whitespace-nowrap">{SCENES[id].title}</span>
-                            <span className="text-black/50">{SCENES[id].blurb}</span>
                           </button>
                         </li>
                       );
@@ -89,7 +88,7 @@ export function FlowTabs({ scene, onScene, progress, autoplay }: Props) {
           );
         })}
       </div>
-      <div className="mt-auto pt-10 text-[14px] tracking-[-0.01em]">
+      <div className="mt-auto pt-8 text-[14px] md:pt-10 tracking-[-0.01em]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icons/gauge.svg" alt="" width={24} height={24} />
         <p className="mt-3 leading-normal text-black">~600ms response time</p>
