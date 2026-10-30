@@ -86,6 +86,12 @@ export function Panel({ stage, scene, version, onChange, onResetLook }: Props) {
     floor.addBinding(params, "contactShadow", { min: 0, max: 1, step: 0.01, label: "contact shadow" });
     floor.addBinding(params, "contactColor", { label: "shadow colour" });
 
+    const tr = pane.addFolder({ title: "Transition" });
+    tr.addBinding(params.transition, "morph", { label: "morph particles" });
+    tr.addBinding(params.transition, "duration", { min: 0.3, max: 4, step: 0.05, label: "duration s" });
+    tr.addBinding(params.transition, "trail", { min: 0, max: 0.2, step: 0.005 });
+    tr.addBinding(params.transition, "swirl", { min: -1.5, max: 1.5, step: 0.01, label: "swirl" });
+
     const cam = pane.addFolder({ title: "Camera", expanded: false });
     cam.addBinding(params.camera, "azimuth", { min: 0, max: 90, step: 0.5 });
     cam.addBinding(params.camera, "elevation", { min: 10, max: 80, step: 0.1 });

@@ -37,7 +37,8 @@ export function FlowTabs({ scene, onScene, progress, autoplay }: Props) {
               <button
                 type="button"
                 onClick={() => onScene(s.scenes[0])}
-                className={`group flex w-full cursor-pointer items-center gap-4 pb-5 text-left ${i > 0 ? "pt-7" : ""}`}
+                disabled={open}
+                className={`group flex w-full items-center gap-4 pb-5 text-left ${open ? "cursor-default" : "cursor-pointer"} ${i > 0 ? "pt-7" : ""}`}
                 aria-expanded={open}
               >
                 <span
@@ -60,7 +61,9 @@ export function FlowTabs({ scene, onScene, progress, autoplay }: Props) {
                           <button
                             type="button"
                             onClick={() => onScene(id)}
-                            className={`relative flex w-full cursor-pointer items-baseline gap-3 py-2 pl-4 text-left text-[14px] leading-[19px] tracking-[-0.01em] transition-colors ${on ? "text-black" : "text-black/50 hover:text-black"}`}
+                            disabled={on}
+                            aria-current={on ? "step" : undefined}
+                            className={`relative flex w-full ${on ? "cursor-default" : "cursor-pointer"} items-baseline gap-3 py-2 pl-4 text-left text-[14px] leading-[19px] tracking-[-0.01em] transition-colors ${on ? "text-black" : "text-black/50 hover:text-black"}`}
                           >
                             <span className="absolute left-0 top-2 bottom-2 w-[2px] overflow-hidden rounded bg-line">
                               {on && (

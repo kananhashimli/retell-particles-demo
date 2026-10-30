@@ -127,12 +127,13 @@ const denoise: SceneDef = {
     const off = [0, 0];
 
     return {
-      update({ t, presence }) {
+      update({ t, presence, loopIn, loopOut }) {
         const C = palette(ctx);
         const P = params<typeof DENOISE>(ctx);
         const L = ctx.particles;
         const W = t < P.waveStart ? 0 : R * 1.1 + easeOut((t - P.waveStart) / P.waveTime) * (P0.outer + P.front + 0.2 - R * 1.1);
-        const fade = win(t, 0, D, 0.5, 0.7) * presence;
+        // the loop starts and ends empty, unless a morph brings the dots in or the next scene takes them
+        const fade = win(t, loopIn ? 0 : -Infinity, loopOut ? D : Infinity, 0.5, 0.7) * presence;
         for (let i = 0; i < N; i++) {
           const p = parts[i];
           const c = easeInOut(smooth(p.r - P.front * 0.3, p.r + P.front * 0.7, W));
@@ -210,6 +211,8 @@ const turns: SceneDef = {
   duration: TURN_DURATION,
   orb: "listening",
   params: TURNS_P,
+  // starts with no dots on the ring, so there is nothing to morph to or from
+  morph: false,
   create(ctx) {
     const { kit, group, look } = ctx;
     const R = ctx.orbRadius;
@@ -462,12 +465,13 @@ const flow: SceneDef = {
     const off = [0, 0];
 
     return {
-      update({ t, presence }) {
+      update({ t, presence, loopOut }) {
         const C = palette(ctx);
         const P = params<typeof FLOW_P>(ctx);
         const L = ctx.particles;
         const a0 = THREE.MathUtils.degToRad(P.start);
-        const end = 1 - smooth(9.2, 9.9, t);
+        // fades out to restart the loop, unless the next scene takes over from the finished rings
+        const end = loopOut ? 1 - smooth(9.2, 9.9, t) : 1;
         // per step: run round (65%), then a check flash
         const state = radii.map((_, i) => {
           const s0 = 0.3 + i * span;
@@ -592,8 +596,8 @@ const colloquial: SceneDef = {
 };
 
 // ------------------------------------------------------------------ Speak · Retell voices (unmuted rings)
-// One ring of particles per voice, all muted and flat. Each voice in turn unmutes its own ring,
-// which rises into a sound wave made of dots, with its own pattern; the orb takes its tint.
+// One ring of particles per voice, all muted and flat. After a quiet lead-in, each voice in turn
+// unmutes its own ring, which rises into a sound wave made of dots, with its own pattern; the orb takes its tint.
 const VOICES_P = {
   inner: { value: 1.35, min: 1.05, max: 2.5, step: 0.01, label: "inner radius ×orb", rebuild: true },
   spacing: { value: 0.4, min: 0.1, max: 1, step: 0.01, label: "ring spacing", rebuild: true },
@@ -602,6 +606,7 @@ const VOICES_P = {
   drift: { value: 1, min: -4, max: 4, step: 1, label: "drift / loop" },
   ringSpeed: { value: 0.35, min: 0, max: 2, step: 0.01, label: "ring speed" },
   fade: { value: 0.35, min: 0.05, max: 0.9, step: 0.01, label: "unmute s" },
+  lead: { value: 0.8, min: 0, max: 3, step: 0.05, label: "all muted s" },
   opacity: { value: 0.32, min: 0, max: 1, step: 0.01, label: "muted opacity" },
   activeOpacity: { value: 1, min: 0, max: 1, step: 0.01, label: "voice opacity" },
   tint: { value: true, label: "tint orb per voice" },
@@ -634,7 +639,6 @@ const voices: SceneDef = {
     });
     const field = kit.particles(pts.length);
     group.add(field);
-    const step = D / NV;
     const off = [0, 0];
 
     return {
@@ -642,8 +646,11 @@ const voices: SceneDef = {
         const C = palette(ctx);
         const P = params<typeof VOICES_P>(ctx);
         const L = ctx.particles;
-        const vi = Math.floor(t / step) % NV;
-        const local = t - vi * step;
+        // all rings muted for the lead-in (and past the loop's end), then one voice at a time
+        const step = (D - Math.min(P.lead, D - 1)) / NV;
+        const u = t - (D - step * NV);
+        const vi = u >= 0 && t < D ? Math.min(NV - 1, Math.floor(u / step)) : -1;
+        const local = u - vi * step;
         const on = radii.map((_, i) => (i === vi ? win(local, 0, step, P.fade, P.fade) : 0));
         const level = radii.map((_, i) => 0.3 + 0.7 * speech(t, i * 5));
         const spin = (TAU * t * P.drift) / D;
@@ -661,10 +668,10 @@ const voices: SceneDef = {
           field.set(i, Math.cos(ra) * r, 0.02 + off[1] + P.height * k, Math.sin(ra) * r, L.size * lerp(1, L.emphasis, o * w) * g.s, mix3(C.ink, mix3(C.accent, C.high, k), o), lerp(P.opacity, P.activeOpacity, o * (0.45 + 0.55 * w)) * presence);
         }
         field.commit();
-        const s = speech(t, vi * 5) * on[vi];
+        const s = vi < 0 ? 0 : speech(t, vi * 5) * on[vi];
         ctx.orb.speak = s;
         ctx.orb.bands = [s, s * 0.8, s * 0.6];
-        ctx.orb.tint = P.tint ? { mid: VOICES[vi].mid, high: VOICES[vi].high } : null;
+        ctx.orb.tint = P.tint && vi >= 0 ? { mid: VOICES[vi].mid, high: VOICES[vi].high } : null;
       },
     };
   },

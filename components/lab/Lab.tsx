@@ -82,10 +82,9 @@ export function Lab() {
 
   const pickScene = useCallback(
     (id: SceneId) => {
-      if (!stage) return;
+      if (!stage || id === stage.config.scene) return;
       // choosing by hand stops auto-advance so the scene can be studied
-      stage.applyConfig({ scene: id, autoplay: id === stage.config.scene ? stage.config.autoplay : false });
-      if (id === stage.config.scene) stage.restart();
+      stage.applyConfig({ scene: id, autoplay: false });
       persist(stage.config);
       setVersion((v) => v + 1);
     },

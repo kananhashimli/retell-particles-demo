@@ -59,6 +59,12 @@
     "muted": "#1A1C22",
     "active": "#7b5cff"
   },
+  "transition": {
+    "morph": true,
+    "duration": 1.4,
+    "trail": 0.03,
+    "swirl": 0.25
+  },
   "sceneParams": {
     "denoise": {
       "rings": 3,
@@ -124,7 +130,7 @@
       "pauses": 0.15,
       "guide": false,
       "guideOpacity": 0.18,
-      "playhead": true,
+      "playhead": false,
       "playheadLength": 0.06,
       "markers": false,
       "interval": 0.45,
@@ -277,7 +283,7 @@
       "fade": 0.35,
       "dotSize": 1.75,
       "activeSize": 2.45,
-      "opacity": 0.28,
+      "opacity": 0.5,
       "activeOpacity": 1,
       "tint": true,
       "rings": 3,
@@ -310,7 +316,9 @@
       "own_active": false,
       "p_active": "#3E6AEF",
       "own_highlight": false,
-      "p_highlight": "#3E8CF7"
+      "p_highlight": "#3E8CF7",
+      "ringSpeed": 0.35,
+      "lead": 0.8
     },
     "colloquial": {
       "spacing": 0.06,
@@ -366,5 +374,16 @@
       "own_highlight": false,
       "p_highlight": "#3E8CF7"
     }
+  },
+  "light": {
+    "orb": 6,
+    "key": 1.4,
+    "ambient": 1.6,
+    "shadows": 0
+  },
+  "cards": {
+    "show": false,
+    "style": "glass-dark",
+    "scale": 1
   }
 }

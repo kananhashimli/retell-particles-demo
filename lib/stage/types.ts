@@ -68,6 +68,8 @@ export interface StageConfig {
   particles: ParticleLook;
   /** shared look of every stroke (Line direction) */
   lines: LineLook;
+  /** scene changes between particle scenes: the dots fly to the next scene instead of crossfading */
+  transition: { morph: boolean; duration: number; trail: number; swirl: number };
   /** per-scene settings, only the values that differ from the scene's defaults need to be here */
   sceneParams: Partial<Record<SceneId, SceneParams>>;
 }
@@ -177,6 +179,9 @@ export interface FrameInfo {
   dt: number;
   /** 0..1 enter / exit */
   presence: number;
+  /** whether to fade in at the loop's start / out at its end; off when a morph or the next scene takes over */
+  loopIn: boolean;
+  loopOut: boolean;
 }
 
 export interface SceneInstance {
@@ -188,6 +193,8 @@ export interface SceneDef {
   duration: number;
   orb: OrbState;
   params?: ParamDefs;
+  /** false: always crossfade into and out of this scene, never morph */
+  morph?: boolean;
   create(ctx: SceneContext): SceneInstance;
 }
 

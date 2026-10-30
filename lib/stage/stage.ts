@@ -8,6 +8,7 @@ import { zipSync, strToU8 } from "fflate";
 import { Orb } from "./orb";
 import { Floor } from "./floor";
 import { Kit } from "./kit";
+import { fieldsOf, frozenDots, liveDots, Morph, type Dots } from "./morph";
 import type {
   Direction, FloorScope, SceneParams, ParticleLook, Look, OrbScope, SceneContext, SceneDef, SceneId, SceneInstance, StageConfig, DeepPartial,
 } from "./types";
@@ -26,8 +27,14 @@ interface Active {
   scope: { presence: number };
   age: number;
   leaving: boolean;
-  /** once leaving, the age at which it stops: the end of the loop it is in, so it never replays its opening */
-  holdAt?: number;
+  /** arrived by a morph: no fade-in at the start of its first loop */
+  morphIn: boolean;
+  /** the morph's source: hidden, but kept running at full strength so its dots leave moving */
+  morphOut: boolean;
+  /** has drawn at least one frame */
+  drawn: boolean;
+  /** once leaving, the age at which its loop ends; past it, its clock keeps counting instead of wrapping to t = 0 */
+  endAt?: number;
 }
 
 export interface StageEvents {
@@ -59,6 +66,9 @@ export class Stage {
   private ro: ResizeObserver;
   private listeners: { [K in keyof StageEvents]: Set<StageEvents[K]> } = { scene: new Set(), loop: new Set() };
   private frozen = false; // exports drive frames themselves
+  private morph: Morph | null = null;
+  /** the scene the morph flies from */
+  private morphFrom: Active | null = null;
   private onFrame?: () => void;
   private lookKey = "";
 
@@ -156,10 +166,21 @@ export class Stage {
     const current = this.active.find((a) => !a.leaving);
     if (current && current.id === id && !o.force && current.def === this.direction.scenes[id]) return;
     this.config.scene = id;
+    // the dots to fly from: the current scene, live; or, cutting a morph short, what is in flight, frozen
+    let from: Dots | null = null;
+    let fromScene: Active | null = null;
+    if (!o.instant && this.config.transition.morph && current && current.def.morph !== false && this.direction.scenes[id].morph !== false) {
+      if (this.morph) from = frozenDots([...fieldsOf(current.group), ...fieldsOf(this.morph.group)], this.pxScale);
+      else {
+        from = liveDots(fieldsOf(current.group));
+        fromScene = current;
+      }
+    }
+    this.endMorph();
     for (const a of this.active) {
       if (a.leaving) continue;
       a.leaving = true;
-      a.holdAt = (Math.floor(a.age / a.def.duration) + 1) * a.def.duration;
+      a.endAt = (Math.floor(a.age / a.def.duration) + 1) * a.def.duration;
       gsap.killTweensOf(a.scope);
       if (o.instant) this.disposeActive(a);
       else gsap.to(a.scope, { presence: 0, duration: 0.55, ease: "power2.in", onComplete: () => this.disposeActive(a) });
@@ -218,10 +239,36 @@ export class Stage {
       },
     };
     const inst = def.create(ctx);
-    const a: Active = { id, def, inst, group, orb, scope, age: 0, leaving: false };
+    const targets = fieldsOf(group);
+    const morphIn = !!from && from.n > 0 && targets.length > 0;
+    // arriving by a morph, its clock starts early: it moves the whole time the dots fly in, and reaches
+    // t = 0 as they land, so the morph never eats into its opening (scenes read t < 0 as "not started yet")
+    const age = morphIn ? -this.config.transition.duration : 0;
+    const a: Active = { id, def, inst, group, orb, scope, age, leaving: false, morphIn, morphOut: false, drawn: false };
+    if (morphIn) {
+      // the old scene's dots become the morph; the old scene runs on unseen until it lands
+      current!.group.visible = false;
+      if (fromScene) {
+        fromScene.morphOut = true;
+        gsap.killTweensOf(fromScene.scope);
+        gsap.to(fromScene.scope, { presence: 0, duration: 0.55, ease: "power2.in" });
+        this.morphFrom = fromScene;
+      }
+      scope.presence = 1;
+      this.morph = new Morph(from!, targets, { ...this.config.transition }, this.resolution);
+      this.scene.add(this.morph.group);
+    }
     this.active.push(a);
-    if (!o.instant) gsap.to(scope, { presence: 1, duration: 0.9, delay: 0.25, ease: "power2.out" });
+    if (!o.instant && !morphIn) gsap.to(scope, { presence: 1, duration: 0.9, delay: 0.25, ease: "power2.out" });
     this.emit("scene", id);
+  }
+
+  /** stop a morph: drop its dots and its source scene */
+  private endMorph() {
+    this.morph?.dispose();
+    this.morph = null;
+    if (this.morphFrom && this.active.includes(this.morphFrom)) this.disposeActive(this.morphFrom);
+    this.morphFrom = null;
   }
 
   /** restart the current scene from t = 0 at full presence */
@@ -251,7 +298,7 @@ export class Stage {
   /** 0..1 through the current loop */
   get progress() {
     const c = this.current;
-    return c ? (c.age % c.def.duration) / c.def.duration : 0;
+    return c ? Math.max(0, c.age % c.def.duration) / c.def.duration : 0;
   }
 
   // ------------------------------------------------------------------ frame
@@ -272,23 +319,38 @@ export class Stage {
     let best: Active | undefined;
     let listen = 0, speak = 0;
     const bands: [number, number, number] = [0, 0, 0];
-    for (const a of [...this.active]) {
+    const tick = (a: Active, dt: number) => {
       const d = a.def.duration;
       const before = a.age % d;
       a.age += dt;
-      // announce the wrap before drawing it: autoplay moves on here, and this scene then holds its last moment
+      // announce the wrap before drawing it: autoplay moves on here, and this scene then plays on past its end
       if (!a.leaving && a.age % d < before) {
         this.emit("loop", a.id);
-        if (a.leaving) a.holdAt = a.age - (a.age % d);
+        if (a.leaving) a.endAt = a.age - (a.age % d);
       }
-      // a scene fading out never wraps to t = 0, which would replay its opening under the next scene
-      const t = a.leaving && a.holdAt !== undefined && a.age >= a.holdAt ? d - 1e-3 : a.age % d;
-      a.inst.update({ t, age: a.age, dt, presence: a.scope.presence });
+      // a scene on its way out never wraps to t = 0, which would replay its opening under the next scene
+      const t = a.leaving && a.endAt !== undefined && a.age >= a.endAt ? d + a.age - a.endAt : a.age % d;
+      a.inst.update({
+        t,
+        age: a.age,
+        dt,
+        presence: a.morphOut ? 1 : a.scope.presence,
+        loopIn: !(a.morphIn && a.age < d),
+        loopOut: !a.morphOut && !this.advances,
+      });
+      a.drawn = true;
       const p = a.scope.presence;
       if (!best || p > best.scope.presence) best = a;
       listen += a.orb.listen * p;
       speak += a.orb.speak * p;
       for (let i = 0; i < 3; i++) bands[i] += a.orb.bands[i] * p;
+    };
+    for (const a of [...this.active]) if (this.active.includes(a)) tick(a, dt);
+    // a scene switched to during this frame (autoplay) draws now too, so no frame goes empty
+    for (const a of [...this.active]) if (!a.drawn) tick(a, 0);
+    if (this.morph) {
+      this.morph.update(dt, this.pxScale, this.config.orb.radius);
+      if (this.morph.done) this.endMorph();
     }
     const d = this.orb.drive;
     d.state = best ? best.orb.state : "idle";
@@ -306,6 +368,16 @@ export class Stage {
     d.bands = bands;
     this.orb.update(dt);
     this.floor.endFrame(this.orb.energy);
+  }
+
+  /** autoplay moves on at the loop's end (and nothing is exporting a loop), so scenes needn't fade out there */
+  private get advances() {
+    return this.config.autoplay && !this.frozen && !this.onFrame;
+  }
+
+  /** css px per unit of particle size */
+  private get pxScale() {
+    return this.pointScale.value / this.renderer.getPixelRatio();
   }
 
   render() {
@@ -390,7 +462,7 @@ export class Stage {
       h: this.h,
       dpr: this.dpr,
       config: this.config,
-      groups: this.active.map((a) => a.group),
+      groups: [...this.active.filter((a) => a.group.visible).map((a) => a.group), ...(this.morph ? [this.morph.group] : [])],
       ripples: fx.ripples,
       tiles: fx.tiles,
     });
@@ -511,6 +583,7 @@ export class Stage {
   dispose() {
     cancelAnimationFrame(this.raf);
     this.ro.disconnect();
+    this.endMorph();
     for (const a of [...this.active]) this.disposeActive(a);
     this.orb.dispose();
     this.floor.dispose();

@@ -17,6 +17,7 @@ export const DEFAULT_CONFIG: StageConfig = {
   orb: { radius: 1, shadow: "#F7F8FB", mid: "#40d9f7", highlight: "#3e8cf7", grain: 0.4, speed: 1, contrast: 1, brightness: 0, crop: 1.06, shade: "#0D39BD", shadeAmount: 0.8, reflection: 0.6 },
   particles: { size: 1.5, emphasis: 1.6, density: 1, scatter: 0.025, idle: 0.012, idleSpeed: 3, muted: "#1A1C22", active: "#3E6AEF", highlight: "#3E8CF7" },
   lines: { width: 1.3, emphasis: 1.25, muted: "#1A1C22", active: "#3E6AEF" },
+  transition: { morph: true, duration: 1.4, trail: 0.03, swirl: 0.25 },
   sceneParams: {},
 };
 

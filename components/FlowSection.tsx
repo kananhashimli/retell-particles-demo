@@ -29,9 +29,8 @@ export function FlowSection() {
 
   const pickScene = useCallback(
     (id: SceneId) => {
-      if (!stage) return;
-      if (id === stage.config.scene) stage.restart();
-      else stage.applyConfig({ scene: id });
+      if (!stage || id === stage.config.scene) return;
+      stage.applyConfig({ scene: id });
     },
     [stage],
   );
