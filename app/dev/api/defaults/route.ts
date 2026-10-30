@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { DirectionId, StageConfig } from "@/lib/stage/types";
+import { DEFAULT_CONFIG } from "@/lib/stage/config";
 
 const IDS: DirectionId[] = ["line", "particles"];
 
@@ -23,8 +24,10 @@ export async function POST(request: Request) {
     return Response.json({ error: "That isn't a stage config" }, { status: 400 });
   }
   for (const [id, c] of entries) {
+    // only settings the stage still has: a config saved before a setting was removed would bring it back
+    const known = Object.fromEntries(Object.entries(c).filter(([k]) => k in DEFAULT_CONFIG));
     // defaults open on the first scene and cycle through the rest
-    const out = tidy({ ...c, scene: "denoise", playing: true, autoplay: true });
+    const out = tidy({ ...known, scene: "denoise", playing: true, autoplay: true });
     await writeFile(path.join(process.cwd(), "lib/stage/defaults", `${id}.json`), `${JSON.stringify(out, null, 2)}\n`);
   }
   return Response.json({ saved: entries.map(([id]) => id) });

@@ -374,16 +374,5 @@
       "own_highlight": false,
       "p_highlight": "#3E8CF7"
     }
-  },
-  "light": {
-    "orb": 6,
-    "key": 1.4,
-    "ambient": 1.6,
-    "shadows": 0
-  },
-  "cards": {
-    "show": false,
-    "style": "glass-dark",
-    "scale": 1
   }
 }
