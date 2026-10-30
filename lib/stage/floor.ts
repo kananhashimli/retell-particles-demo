@@ -161,7 +161,6 @@ void main() {
 
 export class Floor {
   readonly mesh: THREE.Mesh;
-  readonly shadowCatcher: THREE.Mesh;
   private u: Record<string, THREE.IUniform>;
   private ripples: Ripple[] = [];
   private tiles: Tile[] = [];
@@ -206,13 +205,6 @@ export class Floor {
     this.mesh.rotation.x = -Math.PI / 2;
     this.mesh.renderOrder = -2;
     this.mesh.name = "floor";
-
-    this.shadowCatcher = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.1, depthWrite: false }));
-    this.shadowCatcher.rotation.x = -Math.PI / 2;
-    this.shadowCatcher.position.y = 0.001;
-    this.shadowCatcher.receiveShadow = true;
-    this.shadowCatcher.renderOrder = -1;
-    this.shadowCatcher.name = "floor-shadows";
   }
 
   setLook(l: FloorLook, orbRadius: number) {
@@ -292,7 +284,5 @@ export class Floor {
   dispose() {
     this.mesh.geometry.dispose();
     (this.mesh.material as THREE.Material).dispose();
-    this.shadowCatcher.geometry.dispose();
-    (this.shadowCatcher.material as THREE.Material).dispose();
   }
 }

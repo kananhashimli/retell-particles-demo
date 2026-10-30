@@ -1,5 +1,4 @@
 import type * as THREE from "three";
-import type { CardScope, CardStyle } from "./cards";
 import type { GridStyle, Ripple, Tile } from "./floor";
 import type { OrbState } from "./orb";
 import type { Kit } from "./kit";
@@ -65,8 +64,6 @@ export interface StageConfig {
     /** the orb mirrored in the floor beneath it, in its own colours */
     reflection: number;
   };
-  light: { orb: number; key: number; ambient: number; shadows: number };
-  cards: { show: boolean; style: CardStyle; scale: number };
   /** shared look of every particle, dot and streak (Particles direction) */
   particles: ParticleLook;
   /** shared look of every stroke (Line direction) */
@@ -156,7 +153,6 @@ export interface FloorScope {
 
 export interface SceneContext {
   group: THREE.Group;
-  cards: CardScope;
   floor: FloorScope;
   orb: OrbScope;
   orbRadius: number;

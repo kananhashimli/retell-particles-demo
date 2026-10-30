@@ -9,7 +9,7 @@ import * as THREE from "three";
 import type { Direction, ParamDefs, ParamValues, SceneContext, SceneDef } from "../types";
 import type { FatLine } from "../kit";
 import { clamp, easeInOut, easeOut, lerp, resample, smooth, speech, TAU, win } from "../util";
-import { orbEdge, pop, screenAxes, showBetween, TURN_CARDS, TURN_DURATION, TURNS, typeBetween, voiceAt, VOICES } from "./shared";
+import { pop, screenAxes, TURN_DURATION, TURNS, voiceAt, VOICES } from "./shared";
 
 const v3 = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -109,10 +109,6 @@ const denoise: SceneDef = {
       return l;
     });
     const pos = new Float32Array(N * 3);
-    const right = screenAxes(ctx.camera).floorRight;
-    const lNoise = ctx.cards.add({ anchor: v3(0, 0.2, 0).addScaledVector(right, -3), y: -28, align: "center", kind: "label", title: "Caller + room noise" });
-    const lClean = ctx.cards.add({ anchor: orbEdge(ctx, 330, 0.25), x: 14, y: 10, align: "left", kind: "label", title: "Voice only", accent: true });
-    const listen = ctx.cards.add({ anchor: orbEdge(ctx, 200, 0.1), x: -14, align: "right", icon: "spinner", title: "Listening to the caller…", meta: "Agent", time: "Now" });
 
     return {
       update({ t, presence }) {
@@ -141,9 +137,6 @@ const denoise: SceneDef = {
         });
         styleLines(ctx);
         ctx.orb.listen = 0.25 + 0.75 * speech(t, 3);
-        lNoise.opacity = presence;
-        lClean.opacity = presence;
-        showBetween(listen, t, 0.2, 7.8, 0.4, 0.4);
       },
     };
   },
@@ -223,9 +216,8 @@ const turns: SceneDef = {
     ].map((m) => {
       const l = own(kit.line(2, { width: 1.1, color: look.ink, opacity: 0.4 }));
       group.add(l);
-      return { ...m, l, card: ctx.cards.add({ anchor: at(2.4, angle(m.t), 0.02), kind: "label", title: m.title, y: -14, align: "center", accent: m.title.startsWith("Interrupt") }) };
+      return { ...m, l };
     });
-    const status = TURN_CARDS.map((c) => ctx.cards.add({ anchor: orbEdge(ctx, 205, 0.15), x: -12, align: "right", icon: c.icon, title: c.title, accent: c.accent, meta: c.meta, time: "Now" }));
 
     return {
       update({ t, age, presence }) {
@@ -260,8 +252,6 @@ const turns: SceneDef = {
           m.l.setPoints([at(r + 0.12, angle(m.t)), at(r + 0.12 + P.markerLength, angle(m.t))]);
           m.l.material.linewidth = P.markerWidth;
           m.l.material.color.set(P.markerColor);
-          m.card.anchor = at(r + 0.23 + P.markerLength, angle(m.t), 0.02);
-          m.card.opacity = w;
           m.l.opacity = P.markers ? P.markerOpacity * w : 0;
         });
 
@@ -273,7 +263,6 @@ const turns: SceneDef = {
         ctx.orb.listen = caller;
         ctx.orb.speak = agent;
         ctx.orb.bands = [agent, agent * 0.8, agent * 0.5];
-        TURN_CARDS.forEach((c, i) => showBetween(status[i], t, c.a, c.b, 0.25, 0.2));
       },
     };
   },
@@ -323,11 +312,10 @@ interface Node {
   base: FatLine;
   lit: FatLine;
   stem: FatLine;
-  label: ReturnType<SceneContext["cards"]["add"]>;
 }
 
 /** a node on a grid axis: dir is ±x or ±z */
-function makeNode(ctx: SceneContext, P: ThinkP, dir: THREE.Vector3, title: string, dashed = false): Node {
+function makeNode(ctx: SceneContext, P: ThinkP, dir: THREE.Vector3, dashed = false): Node {
   const { kit, group, look } = ctx;
   const p = dir.clone().multiplyScalar(P.distance);
   const pts = squarePts(p, P.plate, P.corner);
@@ -338,8 +326,7 @@ function makeNode(ctx: SceneContext, P: ThinkP, dir: THREE.Vector3, title: strin
   const stem = kit.line(2, { width: 1, color: look.ink, opacity: 0.3 });
   stem.setPoints([p.clone().setY(Y), p.clone().setY(P.stemHeight)]);
   group.add(base, lit, stem);
-  const label = ctx.cards.add({ kind: "label", anchor: p.clone().setY(P.stemHeight), y: -12, align: "center", title });
-  return { p, base, lit, stem, label };
+  return { p, base, lit, stem };
 }
 
 /** straight path along the node's grid axis, between the plate and the orb's contact point */
@@ -389,10 +376,10 @@ const llm: SceneDef = {
   create(ctx) {
     const P0 = params<typeof THINK>(ctx);
     const nodes = {
-      transcript: makeNode(ctx, P0, Z, "Live transcript"),
-      knowledge: makeNode(ctx, P0, X.clone().negate(), "Knowledge base"),
-      calendar: makeNode(ctx, P0, Z.clone().negate(), "Calendar"),
-      reply: makeNode(ctx, P0, X, "Reply"),
+      transcript: makeNode(ctx, P0, Z),
+      knowledge: makeNode(ctx, P0, X.clone().negate()),
+      calendar: makeNode(ctx, P0, Z.clone().negate()),
+      reply: makeNode(ctx, P0, X),
     };
     const paths = {
       transcript: makePath(ctx, P0, nodes.transcript, false),
@@ -405,7 +392,6 @@ const llm: SceneDef = {
       { k: "knowledge" as const, start: 0.7 },
       { k: "calendar" as const, start: 1.2 },
     ];
-    const note = ctx.cards.add({ kind: "note", anchor: orbEdge(ctx, 32, 0.25), x: 14, align: "left", icon: "spark", title: "Retell LLM", lines: ["intent  reschedule_appointment", "slot    thu 15:00  → confirm"], mono: true });
 
     return {
       update({ t, presence }) {
@@ -414,7 +400,6 @@ const llm: SceneDef = {
         styleThink(ctx, P, Object.values(nodes), Object.values(paths), presence);
         Object.values(nodes).forEach((n, i) => {
           n.base.opacity = P.plateOpacity * pop(presence, i, 4);
-          n.label.opacity = presence;
         });
 
         // inputs draw in, then keep flowing while the orb reads them
@@ -441,8 +426,6 @@ const llm: SceneDef = {
         nodes.reply.lit.opacity = lit * presence;
         ctx.floor.tile({ x: nodes.reply.p.x, z: nodes.reply.p.z, strength: P.highlight * lit, size: P0.plate * 0.86 });
         styleLines(ctx);
-        showBetween(note, t, 1.2, 8.4, 0.4, 0.4);
-        typeBetween(note, t, 1.6, 5.4);
       },
     };
   },
@@ -457,16 +440,14 @@ const flow: SceneDef = {
   create(ctx) {
     const { kit, group, look } = ctx;
     const P0 = params<typeof THINK>(ctx);
-    const nA = makeNode(ctx, P0, Z, "01  Verify caller");
-    const nC = makeNode(ctx, P0, X, "02  Book visit");
-    const nD = makeNode(ctx, P0, Z.clone().negate(), "02b  Transfer", true);
+    const nA = makeNode(ctx, P0, Z);
+    const nC = makeNode(ctx, P0, X);
+    const nD = makeNode(ctx, P0, Z.clone().negate(), true);
     const pA = makePath(ctx, P0, nA, false);
     const pC = makePath(ctx, P0, nC, true);
     const pD = makePath(ctx, P0, nD, true);
     const probe = { c: kit.line(pC.pts.length, { width: 1.5, color: look.accent, opacity: 0 }), d: kit.line(pD.pts.length, { width: 1.5, color: look.accent, opacity: 0 }) };
     group.add(probe.c, probe.d);
-    const status = ctx.cards.add({ anchor: orbEdge(ctx, 35, 0.1), x: 14, align: "left", icon: "spinner", title: "Checking outcomes…", meta: "Conversation flow", time: "Now" });
-    const done = ctx.cards.add({ anchor: orbEdge(ctx, 35, 0.1), x: 14, align: "left", icon: "check", title: "Goal met — moving on", accent: true, meta: "Conversation flow", time: "Now" });
 
     return {
       update({ t, presence }) {
@@ -496,13 +477,6 @@ const flow: SceneDef = {
 
         ctx.floor.tile({ x: nC.p.x, z: nC.p.z, strength: P.highlight * chosen, size: P0.plate * 0.86 });
         styleLines(ctx);
-        nA.label.opacity = presence;
-        nA.label.accent = t > 1.4 && t < 9.4;
-        nC.label.opacity = presence;
-        nC.label.accent = chosen > 0.5;
-        nD.label.opacity = presence * (1 - 0.5 * chosen);
-        showBetween(status, t, 1.7, 4.9, 0.3, 0.3);
-        showBetween(done, t, 5.0, 9.3, 0.3, 0.4);
       },
     };
   },
@@ -548,8 +522,6 @@ const colloquial: SceneDef = {
       return l;
     });
     const pos = new Float32Array(N * 3);
-    const wNote = ctx.cards.add({ kind: "note", anchor: orbEdge(ctx, 200, 0.15), x: -10, align: "right", icon: "text", title: "Written", lines: ["Your appointment has been successfully", "rescheduled to Tuesday."] });
-    const sNote = ctx.cards.add({ kind: "note", anchor: orbEdge(ctx, 20, 0.15), x: 12, align: "left", icon: "speaker", title: "Spoken", lines: ["Okay — you’re all set", "for Tuesday."], accent: true });
 
     return {
       update({ t, presence }) {
@@ -585,12 +557,6 @@ const colloquial: SceneDef = {
         const s = lerp(0.5, speech(t, 5), m);
         ctx.orb.speak = s;
         ctx.orb.bands = [s, s * 0.8, s * 0.5];
-        showBetween(wNote, t, 0.3, 9.5, 0.4, 0.4);
-        typeBetween(wNote, t, 0.4, 1.8);
-        wNote.strike = clamp((t - 2.3) / 0.7) * (1 - smooth(9.2, 9.9, t));
-        wNote.opacity *= 1 - 0.4 * m;
-        showBetween(sNote, t, 3.4, 9.2, 0.4, 0.4);
-        typeBetween(sNote, t, 3.6, 4.6);
       },
     };
   },
@@ -637,15 +603,6 @@ const voices: SceneDef = {
     });
     const step = D / NV;
     const pos = new Float32Array(N * 3);
-    const list = ctx.cards.add({
-      kind: "note",
-      anchor: orbEdge(ctx, 205, 0.2),
-      x: -12,
-      align: "right",
-      icon: "wave",
-      title: "Retell voices",
-      lines: VOICES.map((v) => `○  ${v.name} — ${v.trait}`),
-    });
 
     return {
       update({ t, presence }) {
@@ -676,8 +633,6 @@ const voices: SceneDef = {
         ctx.orb.speak = s;
         ctx.orb.bands = [s, s * 0.8, s * 0.6];
         ctx.orb.tint = P.tint ? { mid: VOICES[vi].mid, high: VOICES[vi].high } : null;
-        list.lines = VOICES.map((v, i) => `${i === vi ? "●" : "○"}  ${v.name} — ${v.trait}`);
-        list.opacity = presence;
       },
     };
   },
@@ -693,8 +648,6 @@ export const line: Direction = {
     grid: { style: "lines", color: "#1A1C22", opacity: 0.1, cell: 1, width: 1, major: 0, fadeInner: 3.4, fadeOuter: 8 },
     floorGlow: 0.22,
     contactShadow: 0.26,
-    light: { orb: 6, key: 1.4, ambient: 1.6, shadows: 0.05 },
-    cards: { show: false, style: "outline", scale: 1 },
     camera: { azimuth: 45, elevation: 12, zoom: 1, height: 1.25, panX: 0, panY: 0 },
   },
   scenes: { denoise, turns, llm, flow, colloquial, voices },

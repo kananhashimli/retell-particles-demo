@@ -5,8 +5,8 @@
 
 import * as THREE from "three";
 import type { Direction, ParamDefs, ParamValues, ParticleLook, SceneContext, SceneDef } from "../types";
-import { clamp, easeInOut, easeOut, hash, lerp, rng, shiftHue, smooth, speech, TAU, win } from "../util";
-import { orbEdge, showBetween, TURN_CARDS, TURN_DURATION, TURNS, typeBetween, voiceAt, VOICES } from "./shared";
+import { easeInOut, easeOut, hash, lerp, rng, shiftHue, smooth, speech, TAU, win } from "../util";
+import { TURN_DURATION, TURNS, voiceAt, VOICES } from "./shared";
 
 type RGB = readonly number[];
 const mix3 = (a: RGB, b: RGB, t: number): number[] => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
@@ -125,9 +125,6 @@ const denoise: SceneDef = {
       return { r, rl, a: rand() * TAU, y: 0.05 + Math.pow(rand(), 1.7) * P0.cloud, f: 0.7 + rand() * 1.4, g: grain(i) };
     });
     const off = [0, 0];
-    const listen = ctx.cards.add({ anchor: orbEdge(ctx, 200), x: -14, align: "right", icon: "spinner", title: "Listening to the caller…", meta: "Agent", time: "Now" });
-    const clean = ctx.cards.add({ anchor: orbEdge(ctx, 20, 0.2), x: 14, align: "left", icon: "check", title: "Background noise removed", accent: true, meta: "Denoising", time: "Now" });
-    const noisy = ctx.cards.add({ anchor: orbEdge(ctx, 20, 0.2), x: 14, align: "left", icon: "wave", title: "Traffic, TV, chatter…", meta: "Noise detected", time: "Now" });
 
     return {
       update({ t, presence }) {
@@ -162,9 +159,6 @@ const denoise: SceneDef = {
         dust.commit();
         streaks.commit();
         ctx.orb.listen = speech(t, 3) * 0.8;
-        showBetween(listen, t, 0.2, 8.8, 0.5, 0.4);
-        showBetween(noisy, t, 0.5, P.waveStart + 0.6, 0.4, 0.3);
-        showBetween(clean, t, P.waveStart + 1.4, 8.4, 0.4, 0.5);
       },
     };
   },
@@ -275,9 +269,8 @@ const turns: SceneDef = {
     ].map((m) => {
       const l = kit.line(2, { width: 1.1, color: look.ink, opacity: 0.4 });
       group.add(l);
-      return { ...m, l, card: ctx.cards.add({ anchor: new THREE.Vector3(), kind: "label", title: m.title, y: -14, align: "center", accent: m.title.startsWith("Interrupt") }) };
+      return { ...m, l };
     });
-    const status = TURN_CARDS.map((c) => ctx.cards.add({ anchor: orbEdge(ctx, 205, 0.15), x: -12, align: "right", icon: c.icon, title: c.title, accent: c.accent, meta: c.meta, time: "Now" }));
 
     return {
       update({ t, age, presence }) {
@@ -338,8 +331,6 @@ const turns: SceneDef = {
           m.l.setPoints([at(r + 0.12, angle(m.t)), at(r + 0.12 + P.markerLength, angle(m.t))]);
           m.l.material.linewidth = P.markerWidth;
           m.l.material.color.set(P.markerColor);
-          m.card.anchor = at(r + 0.23 + P.markerLength, angle(m.t), 0.02);
-          m.card.opacity = w;
           m.l.opacity = P.markers ? P.markerOpacity * w : 0;
         });
 
@@ -350,7 +341,6 @@ const turns: SceneDef = {
         ctx.orb.listen = caller;
         ctx.orb.speak = ag;
         ctx.orb.bands = [ag, ag * 0.8, ag * 0.5];
-        TURN_CARDS.forEach((c, i) => showBetween(status[i], t, c.a, c.b, 0.25, 0.2));
       },
     };
   },
@@ -400,8 +390,6 @@ const llm: SceneDef = {
     group.add(field);
     const tmp = new THREE.Vector3();
     const off = [0, 0];
-    const note = ctx.cards.add({ kind: "note", anchor: orbEdge(ctx, 160, 0.4), x: -10, align: "right", icon: "spark", title: "Retell LLM", lines: ["Caller wants to move Tuesday’s visit.", "Checking open slots for Thursday…"] });
-    const chip = ctx.cards.add({ anchor: orbEdge(ctx, -25, 0.4), x: 12, align: "left", icon: "check", title: "Thursday 3:00 pm is open", accent: true, meta: "Retell LLM", time: "Now" });
 
     return {
       update({ t, presence }) {
@@ -429,9 +417,6 @@ const llm: SceneDef = {
           }
         });
         field.commit();
-        showBetween(note, t, 0.6, 7.8, 0.4, 0.4);
-        typeBetween(note, t, 1.0, 4.4);
-        showBetween(chip, t, 5.2, 8.4, 0.35, 0.35);
       },
     };
   },
@@ -441,7 +426,6 @@ const llm: SceneDef = {
 // Each ring around the orb is a step of the call. A comet runs round the current ring until it
 // closes — the outcome is checked — then the next ring starts: the call moves forward.
 // The dots drift slowly round their rings; the lit progress stays put while they pass through it.
-const FLOW_STEPS = ["Greet", "Verify caller", "Find a slot", "Book visit", "Confirm", "Wrap up"];
 const FLOW_P = {
   steps: { value: 4, min: 2, max: 6, step: 1, rebuild: true },
   inner: { value: 1.4, min: 1.05, max: 2.5, step: 0.01, label: "inner radius ×orb", rebuild: true },
@@ -476,9 +460,6 @@ const flow: SceneDef = {
     group.add(field);
     const span = 8.4 / S;
     const off = [0, 0];
-    const labels = radii.map((_, i) => ctx.cards.add({ kind: "label", anchor: new THREE.Vector3(), y: -12, align: "center", title: `${String(i + 1).padStart(2, "0")}  ${FLOW_STEPS[i]}` }));
-    const status = ctx.cards.add({ anchor: orbEdge(ctx, 35, 0.1), x: 14, align: "left", icon: "spinner", title: "Checking outcomes…", meta: "Conversation flow", time: "Now" });
-    const done = ctx.cards.add({ anchor: orbEdge(ctx, 35, 0.1), x: 14, align: "left", icon: "check", title: "Goal met — moving on", accent: true, meta: "Conversation flow", time: "Now" });
 
     return {
       update({ t, presence }) {
@@ -514,13 +495,6 @@ const flow: SceneDef = {
           field.set(i, Math.cos(a) * r, 0.02 + off[1] + pulse * 0.05, Math.sin(a) * r, size, col, Math.min(1, op) * end * presence);
         }
         field.commit();
-        radii.forEach((r, i) => {
-          labels[i].anchor = new THREE.Vector3(Math.cos(a0) * r, 0.05, Math.sin(a0) * r);
-          labels[i].opacity = presence * (0.4 + 0.6 * clamp(state[i].run * 2));
-          labels[i].accent = state[i].run >= 1 && end > 0.5;
-        });
-        showBetween(status, t, 0.3, 8.6, 0.3, 0.3);
-        showBetween(done, t, 8.7, 9.6, 0.2, 0.3);
       },
     };
   },
@@ -571,8 +545,6 @@ const colloquial: SceneDef = {
     const field = kit.particles(N);
     group.add(field);
     const off = [0, 0];
-    const wNote = ctx.cards.add({ kind: "note", anchor: orbEdge(ctx, 200, 0.15), x: -10, align: "right", icon: "text", title: "Written", lines: ["Your appointment has been successfully", "rescheduled to Tuesday."] });
-    const sNote = ctx.cards.add({ kind: "note", anchor: orbEdge(ctx, 20, 0.15), x: 12, align: "left", icon: "speaker", title: "Spoken", lines: ["Okay — you’re all set", "for Tuesday."], accent: true });
 
     return {
       update({ t, presence }) {
@@ -614,12 +586,6 @@ const colloquial: SceneDef = {
         const s = lerp(0.5, speech(t, 5), m);
         ctx.orb.speak = s;
         ctx.orb.bands = [s, s * 0.8, s * 0.5];
-        showBetween(wNote, t, 0.3, 9.5, 0.4, 0.4);
-        typeBetween(wNote, t, 0.4, 1.8);
-        wNote.strike = clamp((t - 2.3) / 0.7) * (1 - smooth(9.2, 9.9, t));
-        wNote.opacity *= 1 - 0.4 * m;
-        showBetween(sNote, t, 3.4, 9.2, 0.4, 0.4);
-        typeBetween(sNote, t, 3.6, 4.6);
       },
     };
   },
@@ -670,7 +636,6 @@ const voices: SceneDef = {
     group.add(field);
     const step = D / NV;
     const off = [0, 0];
-    const card = VOICES.map((v) => ctx.cards.add({ anchor: orbEdge(ctx, 200, 0.1), x: -14, align: "right", icon: "wave", title: `${v.name} · ${v.trait}`, meta: "Retell voices", time: "Speaking" }));
 
     return {
       update({ t, presence }) {
@@ -700,7 +665,6 @@ const voices: SceneDef = {
         ctx.orb.speak = s;
         ctx.orb.bands = [s, s * 0.8, s * 0.6];
         ctx.orb.tint = P.tint ? { mid: VOICES[vi].mid, high: VOICES[vi].high } : null;
-        card.forEach((c, i) => (i === vi ? showBetween(c, local, 0.25, step - 0.05, 0.3, 0.2) : (c.opacity = 0)));
       },
     };
   },
@@ -716,8 +680,6 @@ export const particles: Direction = {
     grid: { style: "lines", color: "#1A1C22", opacity: 0.06, cell: 1, width: 1, major: 0, fadeInner: 3, fadeOuter: 7.5 },
     floorGlow: 0.3,
     contactShadow: 0.8,
-    light: { orb: 6, key: 1.4, ambient: 1.6, shadows: 0.05 },
-    cards: { show: false, style: "glass-dark", scale: 1 },
     camera: { azimuth: 45, elevation: 12, zoom: 1, height: 1.25, panX: 0, panY: 0 },
     particles: { size: 1.5, emphasis: 1.6, density: 1, scatter: 0.025, idle: 0.012, idleSpeed: 3, muted: "#1A1C22", active: "#3E6AEF", highlight: "#3E8CF7" },
   },

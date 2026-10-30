@@ -1,13 +1,12 @@
 // Stage: an isometric room with the orb standing in the middle. Scenes from a Direction add their
-// objects, floor effects, cards and orb input on top; the stage blends them on scene changes and
-// exports stills, layers, SVG cards, PNG sequences and video loops.
+// objects, floor effects and orb input on top; the stage blends them on scene changes and
+// exports stills, layers, SVG, PNG sequences and video loops.
 
 import * as THREE from "three";
 import gsap from "gsap";
 import { zipSync, strToU8 } from "fflate";
 import { Orb } from "./orb";
 import { Floor } from "./floor";
-import { CardLayer, CardScope } from "./cards";
 import { Kit } from "./kit";
 import type {
   Direction, FloorScope, SceneParams, ParticleLook, Look, OrbScope, SceneContext, SceneDef, SceneId, SceneInstance, StageConfig, DeepPartial,
@@ -23,7 +22,6 @@ interface Active {
   def: SceneDef;
   inst: SceneInstance;
   group: THREE.Group;
-  cards: CardScope;
   orb: OrbScope;
   scope: { presence: number };
   age: number;
@@ -37,11 +35,6 @@ export interface StageEvents {
   loop: (id: SceneId) => void;
 }
 
-export interface StageOptions {
-  font?: string;
-  mono?: string;
-}
-
 const deg = THREE.MathUtils.degToRad;
 
 export class Stage {
@@ -51,13 +44,9 @@ export class Stage {
   readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
   readonly orb: Orb;
   readonly floor = new Floor();
-  readonly cards = new CardLayer();
   config: StageConfig;
   direction: Direction;
 
-  private hemi = new THREE.HemisphereLight("#ffffff", "#e9ecf3", 1.4);
-  private key = new THREE.DirectionalLight("#ffffff", 1.4);
-  private orbLight = new THREE.PointLight("#3e8cf7", 8, 0, 2);
   private resolution = new THREE.Vector2(1, 1);
   private pointScale = { value: 1 };
   private active: Active[] = [];
@@ -72,40 +61,20 @@ export class Stage {
   private frozen = false; // exports drive frames themselves
   private onFrame?: () => void;
   private lookKey = "";
-  private tmpColor = new THREE.Color();
 
-  constructor(container: HTMLElement, config: DeepPartial<StageConfig> = {}, opts: StageOptions = {}) {
+  constructor(container: HTMLElement, config: DeepPartial<StageConfig> = {}) {
     this.container = container;
     this.config = mergeConfig(DEFAULT_CONFIG, config);
     this.direction = DIRECTIONS[this.config.direction];
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: "high-performance" });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     const gl = this.renderer.domElement;
     gl.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block";
     container.appendChild(gl);
-    container.appendChild(this.cards.canvas);
-    const cs = getComputedStyle(container);
-    this.cards.setFonts(opts.font ?? cs.fontFamily, opts.mono ?? "ui-monospace, SFMono-Regular, Menlo, monospace");
 
     this.orb = new Orb({ ...this.config.orb });
-    // from the front-left, high: lit faces toward the viewer, shadows fall away to the back-right
-    this.key.position.set(-1.5, 10, 5.5);
-    this.key.castShadow = true;
-    const sc = this.key.shadow.camera;
-    sc.left = sc.bottom = -8;
-    sc.right = sc.top = 8;
-    sc.near = 1;
-    sc.far = 30;
-    this.key.shadow.mapSize.set(2048, 2048);
-    this.key.shadow.radius = 10;
-    this.key.shadow.blurSamples = 16;
-    this.key.shadow.bias = -0.0004;
-    this.key.shadow.normalBias = 0.02;
-    this.orbLight.position.set(0, 1, 0);
-    this.scene.add(this.hemi, this.key, this.orbLight, this.floor.mesh, this.floor.shadowCatcher, this.orb.group);
+    this.scene.add(this.floor.mesh, this.orb.group);
 
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(container);
@@ -147,7 +116,6 @@ export class Stage {
 
     this.renderer.setClearColor(c.background, 1);
     this.orb.setParams(c.orb);
-    this.orbLight.position.set(0, c.orb.radius, 0);
     this.floor.setLook(
       {
         ...c.grid,
@@ -159,15 +127,6 @@ export class Stage {
       },
       c.orb.radius,
     );
-    this.hemi.intensity = c.light.ambient;
-    this.key.intensity = c.light.key;
-    (this.floor.shadowCatcher.material as THREE.ShadowMaterial).opacity = c.light.shadows;
-    this.orbLight.color.set(c.orb.highlight);
-    this.cards.style = c.cards.style;
-    this.cards.scale = c.cards.scale;
-    this.cards.show = c.cards.show;
-    this.cards.accent = c.accent;
-    this.cards.ink = c.ink;
     this.layoutCamera();
 
     if (c.direction !== prevDirection) {
@@ -211,9 +170,7 @@ export class Stage {
     const group = new THREE.Group();
     group.name = `scene:${this.direction.id}:${id}`;
     this.scene.add(group);
-    const cards = this.cards.scope();
     const scope = { presence: o.instant ? 1 : 0 };
-    cards.presence = scope.presence;
     const orb: OrbScope = { state: def.orb, listen: 0, speak: 0, bands: [0, 0, 0] };
     const floorRef = this.floor;
     // eslint-disable-next-line @typescript-eslint/no-this-alias -- read live settings from a getter
@@ -230,7 +187,6 @@ export class Stage {
     };
     const ctx: SceneContext = {
       group,
-      cards,
       floor,
       orb,
       orbRadius: this.config.orb.radius,
@@ -262,13 +218,7 @@ export class Stage {
       },
     };
     const inst = def.create(ctx);
-    group.traverse((o) => {
-      if ((o as THREE.Mesh).isMesh && !(o as THREE.Mesh).userData.noShadow) {
-        o.castShadow = true;
-        o.receiveShadow = true;
-      }
-    });
-    const a: Active = { id, def, inst, group, cards, orb, scope, age: 0, leaving: false };
+    const a: Active = { id, def, inst, group, orb, scope, age: 0, leaving: false };
     this.active.push(a);
     if (!o.instant) gsap.to(scope, { presence: 1, duration: 0.9, delay: 0.25, ease: "power2.out" });
     this.emit("scene", id);
@@ -281,7 +231,6 @@ export class Stage {
 
   private disposeActive(a: Active) {
     a.inst.dispose?.();
-    a.cards.dispose();
     this.scene.remove(a.group);
     a.group.traverse((o) => {
       const m = o as THREE.Mesh;
@@ -334,7 +283,6 @@ export class Stage {
       }
       // a scene fading out never wraps to t = 0, which would replay its opening under the next scene
       const t = a.leaving && a.holdAt !== undefined && a.age >= a.holdAt ? d - 1e-3 : a.age % d;
-      a.cards.presence = a.scope.presence;
       a.inst.update({ t, age: a.age, dt, presence: a.scope.presence });
       const p = a.scope.presence;
       if (!best || p > best.scope.presence) best = a;
@@ -347,7 +295,6 @@ export class Stage {
     const tint = best?.orb.tint;
     this.orb.params.mid = tint ? tint.mid : this.config.orb.mid;
     this.orb.params.highlight = tint ? tint.high : this.config.orb.highlight;
-    this.orbLight.color.lerp(this.tmpColor.set(this.orb.params.highlight), 1 - Math.exp(-dt * 6));
     // the shade, contact shadow and accents turn with the orb's hue as it eases into a tint
     const now = this.orb.highlightNow;
     const base = srgb(this.config.orb.highlight);
@@ -359,13 +306,10 @@ export class Stage {
     d.bands = bands;
     this.orb.update(dt);
     this.floor.endFrame(this.orb.energy);
-    this.orbLight.intensity = this.config.light.orb * (0.55 + 0.9 * this.orb.energy);
-    this.cards.time += dt;
   }
 
   render() {
     this.renderer.render(this.scene, this.camera);
-    this.cards.render(this.camera, this.w, this.h, this.dpr, this.renderer.domElement);
   }
 
   // ------------------------------------------------------------------ layout
@@ -412,39 +356,32 @@ export class Stage {
 
   // ------------------------------------------------------------------ exports
   /** Renders the current moment at `scale`× css size. */
-  async snapshot(o: { scale?: number; transparent?: boolean; cards?: boolean } = {}) {
-    const { scale = 2, transparent = false, cards = true } = o;
+  async snapshot(o: { scale?: number; transparent?: boolean } = {}) {
+    const { scale = 2, transparent = false } = o;
     return this.withSize(scale, transparent, async () => {
       this.renderer.render(this.scene, this.camera);
-      return this.compose(cards);
+      return this.compose();
     });
   }
 
-  /** Separate transparent PNGs per layer (floor, objects, orb, cards) + the config, zipped. */
+  /** Separate transparent PNGs per layer (floor, objects, orb) + the config, zipped. */
   async exportLayers(scale = 2) {
     const files: Record<string, Uint8Array> = {};
     await this.withSize(scale, true, async () => {
       const layers: ["floor" | "objects" | "orb", string][] = [["floor", "1-floor.png"], ["objects", "2-objects.png"], ["orb", "3-orb.png"]];
       for (const [layer, name] of layers) {
         this.renderLayer(layer);
-        files[name] = new Uint8Array(await (await this.compose(false)).arrayBuffer());
+        files[name] = new Uint8Array(await (await this.compose()).arrayBuffer());
       }
       this.renderer.render(this.scene, this.camera);
-      this.cards.render(this.camera, this.w, this.h, scale, this.renderer.domElement);
-      files["4-cards.png"] = new Uint8Array(await (await toBlob(this.cards.canvas)).arrayBuffer());
-      files["0-composite.png"] = new Uint8Array(await (await this.compose(true)).arrayBuffer());
+      files["0-composite.png"] = new Uint8Array(await (await this.compose()).arrayBuffer());
     });
     this.renderer.setClearColor(this.config.background, 1);
-    files["4-cards.svg"] = strToU8(this.cardsSVG());
     files["config.json"] = strToU8(JSON.stringify(this.config, null, 2));
     return new Blob([zipSync(files) as BlobPart], { type: "application/zip" });
   }
 
-  cardsSVG() {
-    return this.cards.toSVG(this.camera, this.w, this.h);
-  }
-
-  /** The current frame as vector SVG: grid, strokes, particles, floor highlights and cards (no orb). */
+  /** The current frame as vector SVG: grid, strokes, particles, floor highlights (no orb). */
   sceneSVG() {
     const fx = this.floor.frameEffects;
     return buildSceneSVG({
@@ -456,7 +393,6 @@ export class Stage {
       groups: this.active.map((a) => a.group),
       ripples: fx.ripples,
       tiles: fx.tiles,
-      cards: this.cards.show ? this.cards.toSVGContent(this.camera, this.w, this.h) : "",
     });
   }
 
@@ -475,7 +411,7 @@ export class Stage {
           if (i > 0) this.step(1 / fps);
           else this.step(0);
           this.renderer.render(this.scene, this.camera);
-          const b = await this.compose(true);
+          const b = await this.compose();
           files[`frame-${String(i).padStart(4, "0")}.png`] = new Uint8Array(await b.arrayBuffer());
           onProgress?.((i + 1) / n);
         }
@@ -517,7 +453,6 @@ export class Stage {
       octx.fillStyle = this.config.background;
       octx.fillRect(0, 0, out.width, out.height);
       octx.drawImage(this.renderer.domElement, 0, 0);
-      octx.drawImage(this.cards.canvas, 0, 0);
       const p = (performance.now() - start) / 1000 / total;
       onProgress?.(Math.min(1, p));
       if (p >= 1 && rec.state === "recording") rec.stop();
@@ -538,38 +473,25 @@ export class Stage {
     this.renderer.setSize(this.w, this.h, false);
     this.syncPixelScale(scale);
     this.renderer.setClearColor(this.config.background, transparent ? 0 : 1);
-    this.exportScale = scale;
     try {
       return await fn();
     } finally {
-      this.exportScale = 0;
       this.renderer.setClearColor(this.config.background, 1);
       this.frozen = wasFrozen;
       this.resize();
       this.last = performance.now();
     }
   }
-  private exportScale = 0;
 
-  private async compose(withCards: boolean) {
-    const gl = this.renderer.domElement;
-    const out = document.createElement("canvas");
-    out.width = gl.width;
-    out.height = gl.height;
-    const ctx = out.getContext("2d")!;
-    ctx.drawImage(gl, 0, 0);
-    if (withCards) {
-      this.cards.render(this.camera, this.w, this.h, this.exportScale || this.dpr, gl);
-      ctx.drawImage(this.cards.canvas, 0, 0, out.width, out.height);
-    }
-    return toBlob(out);
+  private async compose() {
+    return toBlob(this.renderer.domElement);
   }
 
   /** Render one layer in colour; everything else still writes depth so occlusion stays right. */
   private renderLayer(layer: "floor" | "objects" | "orb") {
     const saved: [THREE.Material, boolean][] = [];
     const inLayer = (o: THREE.Object3D): boolean => {
-      if (o === this.floor.mesh || o === this.floor.shadowCatcher || o === this.orb.reflection) return layer === "floor";
+      if (o === this.floor.mesh || o === this.orb.reflection) return layer === "floor";
       if (o === this.orb.mesh) return layer === "orb";
       return layer === "objects";
     };
@@ -582,7 +504,6 @@ export class Stage {
         if (!keep) m.colorWrite = false;
       }
     });
-    // floor shadows of objects belong to the floor layer, but the floor itself never occludes
     this.renderer.render(this.scene, this.camera);
     for (const [m, v] of saved) m.colorWrite = v;
   }
@@ -595,7 +516,6 @@ export class Stage {
     this.floor.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
-    this.cards.canvas.remove();
   }
 }
 

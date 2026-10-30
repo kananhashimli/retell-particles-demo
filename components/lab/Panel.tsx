@@ -81,14 +81,10 @@ export function Panel({ stage, scene, version, onChange, onResetLook }: Props) {
     grid.addBinding(params.grid, "fadeInner", { min: 0, max: 10, step: 0.1, label: "fade from" });
     grid.addBinding(params.grid, "fadeOuter", { min: 0.5, max: 16, step: 0.1, label: "fade to" });
 
-    const light = pane.addFolder({ title: "Floor & light" });
-    light.addBinding(params, "floorGlow", { min: 0, max: 1.5, step: 0.01, label: "orb glow" });
-    light.addBinding(params, "contactShadow", { min: 0, max: 1, step: 0.01, label: "contact shadow" });
-    light.addBinding(params, "contactColor", { label: "shadow colour" });
-    light.addBinding(params.light, "orb", { min: 0, max: 30, step: 0.1, label: "orb light" });
-    light.addBinding(params.light, "key", { min: 0, max: 4, step: 0.05, label: "key light" });
-    light.addBinding(params.light, "ambient", { min: 0, max: 4, step: 0.05 });
-    light.addBinding(params.light, "shadows", { min: 0, max: 0.5, step: 0.005, label: "cast shadows" });
+    const floor = pane.addFolder({ title: "Floor" });
+    floor.addBinding(params, "floorGlow", { min: 0, max: 1.5, step: 0.01, label: "orb glow" });
+    floor.addBinding(params, "contactShadow", { min: 0, max: 1, step: 0.01, label: "contact shadow" });
+    floor.addBinding(params, "contactColor", { label: "shadow colour" });
 
     const cam = pane.addFolder({ title: "Camera", expanded: false });
     cam.addBinding(params.camera, "azimuth", { min: 0, max: 90, step: 0.5 });
@@ -102,11 +98,6 @@ export function Panel({ stage, scene, version, onChange, onResetLook }: Props) {
       params.camera.elevation = 35.26;
       pane.refresh();
     });
-
-    const cards = pane.addFolder({ title: "Cards" });
-    cards.addBinding(params.cards, "show");
-    cards.addBinding(params.cards, "style", { options: { "grey glass": "glass-dark", "white glass": "glass-light", outline: "outline" } });
-    cards.addBinding(params.cards, "scale", { min: 0.6, max: 1.6, step: 0.01 });
 
     pane.addButton({ title: "Reset look to defaults" }).on("click", () => cb.current.onResetLook());
 

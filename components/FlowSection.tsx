@@ -16,9 +16,7 @@ export function FlowSection() {
   const [scene, setScene] = useState<SceneId>(CONFIG.scene);
 
   useEffect(() => {
-    const font = getComputedStyle(document.body).fontFamily;
-    const mono = getComputedStyle(document.documentElement).getPropertyValue("--font-mono-g").trim() || "ui-monospace";
-    const st = new Stage(box.current!, CONFIG, { font, mono: `${mono}, ui-monospace, monospace` });
+    const st = new Stage(box.current!, CONFIG);
     setStage(st);
     const offScene = st.on("scene", (id) => setScene(id));
     const offLoop = st.on("loop", (id) => st.applyConfig({ scene: SCENE_ORDER[(SCENE_ORDER.indexOf(id) + 1) % SCENE_ORDER.length] }));

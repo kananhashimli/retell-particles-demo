@@ -1,5 +1,5 @@
 // Vector export of the current frame: the grid, every stroke and particle a scene draws, floor
-// highlights and cards, as plain SVG shapes that stay editable in Figma.
+// highlights, as plain SVG shapes that stay editable in Figma.
 //
 // The orb and the background are left out (the SVG is transparent), but everything the orb hides is
 // cut away, so placing the orb image *under* this SVG reproduces the render: strokes passing in
@@ -22,8 +22,6 @@ export interface SceneSVGInput {
   groups: THREE.Object3D[];
   ripples: Ripple[];
   tiles: Tile[];
-  /** inner SVG markup of the cards, or "" */
-  cards: string;
 }
 
 type Pt = [number, number];
@@ -301,7 +299,6 @@ export function buildSceneSVG(o: SceneSVGInput) {
     `<circle id="orb-position" cx="${f(ox)}" cy="${f(oy)}" r="${f(Math.abs(ex - ox))}" fill="none" stroke="none"/>`,
     `<g id="lines">${lines.join("")}</g>`,
     `<g id="particles">${dots.join("")}</g>`,
-    `<g id="cards">${o.cards}</g>`,
     `</g></svg>`,
   ].join("");
 }

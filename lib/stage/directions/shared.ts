@@ -1,21 +1,5 @@
 import * as THREE from "three";
-import type { Card } from "../cards";
-import type { SceneContext } from "../types";
-import { backOut, clamp, easeInOut, hash, speech, win } from "../util";
-
-/** Fade a card in over [a, b] with a short lift. */
-export function showBetween(card: Card, t: number, a: number, b: number, fin = 0.35, fout = 0.3) {
-  const w = win(t, a, b, fin, fout);
-  card.opacity = w;
-  card.dy = (1 - w) * 8 * (t < (a + b) / 2 ? 1 : -0.6);
-  card.scale = 0.96 + 0.04 * w;
-  return w;
-}
-
-/** Typewriter reveal between a and b. */
-export function typeBetween(card: Card, t: number, a: number, b: number) {
-  card.reveal = clamp((t - a) / (b - a));
-}
+import { backOut, clamp, easeInOut, hash, speech } from "../util";
 
 /** Staggered pop-in driven by scene presence: item i of n. */
 export function pop(presence: number, i: number, n: number, spread = 0.5) {
@@ -33,16 +17,6 @@ export function screenAxes(camera: THREE.Camera) {
   const floorRight = new THREE.Vector3(right.x, 0, right.z).normalize();
   const floorFront = new THREE.Vector3(toViewer.x, 0, toViewer.z).normalize();
   return { right, up, toViewer, floorRight, floorFront };
-}
-
-/** Point on the orb's silhouette at screen angle `deg` (0 = right, 90 = top). */
-export function orbEdge(ctx: SceneContext, deg: number, pad = 0) {
-  const { right, up } = screenAxes(ctx.camera);
-  const a = THREE.MathUtils.degToRad(deg);
-  const R = ctx.orbRadius;
-  return new THREE.Vector3(0, R, 0)
-    .addScaledVector(right, Math.cos(a) * (R + pad))
-    .addScaledVector(up, Math.sin(a) * (R + pad));
 }
 
 // ------------------------------------------------------------------ turn-taking script
@@ -66,17 +40,6 @@ export const TURNS: Segment[] = [
 export const DETECT: [number, number][] = [
   [2.6, 3.15],
   [7.6, 8.15],
-];
-
-export const TURN_CARDS: { a: number; b: number; title: string; icon: "spinner" | "clock" | "check" | "pause" | "speaker" | "ear"; accent?: boolean; meta: string }[] = [
-  { a: 0.3, b: 2.6, title: "Listening to the caller…", icon: "spinner", meta: "Agent" },
-  { a: 2.6, b: 3.6, title: "End of turn detected", icon: "clock", accent: true, meta: "Turn-taking" },
-  { a: 3.6, b: 4.15, title: "Responding…", icon: "speaker", meta: "Agent" },
-  { a: 4.15, b: 5.35, title: "“Mm-hmm” — keep talking", icon: "check", meta: "Backchannel" },
-  { a: 5.4, b: 7.0, title: "Caller cut in — yielding", icon: "pause", accent: true, meta: "Interruption" },
-  { a: 7.0, b: 7.6, title: "Listening to the caller…", icon: "spinner", meta: "Agent" },
-  { a: 7.6, b: 8.5, title: "End of turn detected", icon: "clock", accent: true, meta: "Turn-taking" },
-  { a: 8.5, b: 9.7, title: "Responding…", icon: "speaker", meta: "Agent" },
 ];
 
 /** Who holds the floor, voice levels and detection progress at time t. */

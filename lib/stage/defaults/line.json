@@ -37,17 +37,6 @@
     "contrast": 1,
     "brightness": 0
   },
-  "light": {
-    "orb": 0,
-    "key": 0,
-    "ambient": 0,
-    "shadows": 0.0
-  },
-  "cards": {
-    "show": false,
-    "style": "glass-light",
-    "scale": 0.68
-  },
   "particles": {
     "size": 2.0,
     "emphasis": 1,

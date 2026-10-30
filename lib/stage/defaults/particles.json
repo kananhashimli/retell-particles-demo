@@ -42,17 +42,6 @@
     "shadeAmount": 0.8,
     "reflection": 0.6
   },
-  "light": {
-    "orb": 6,
-    "key": 1.4,
-    "ambient": 1.6,
-    "shadows": 0
-  },
-  "cards": {
-    "show": false,
-    "style": "glass-dark",
-    "scale": 1
-  },
   "particles": {
     "size": 1.6,
     "emphasis": 1,

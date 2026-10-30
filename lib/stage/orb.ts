@@ -226,8 +226,6 @@ void main() {
 export class Orb {
   readonly group = new THREE.Group();
   readonly mesh: THREE.Mesh;
-  /** invisible sphere that only casts the key light's shadow */
-  readonly caster: THREE.Mesh;
   /** mirror image on the floor, drawn under the grid and contact shadow */
   readonly reflection: THREE.Mesh;
   readonly ready: Promise<void>;
@@ -312,13 +310,6 @@ export class Orb {
       (this.uniforms.uDepth.value as THREE.Vector4).set(e[10], e[14], e[11], e[15]);
     };
 
-    this.caster = new THREE.Mesh(
-      new THREE.SphereGeometry(1, 48, 32),
-      new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }),
-    );
-    this.caster.castShadow = true;
-    this.caster.name = "orb-shadow-caster";
-
     const u = this.uniforms;
     this.reflection = new THREE.Mesh(
       new THREE.PlaneGeometry(2, 2),
@@ -336,7 +327,7 @@ export class Orb {
     this.reflection.renderOrder = -3;
     this.reflection.name = "orb-reflection";
 
-    this.group.add(this.mesh, this.caster, this.reflection);
+    this.group.add(this.mesh, this.reflection);
     this.setParams(params);
   }
 
@@ -353,7 +344,6 @@ export class Orb {
     Object.assign(this.params, p);
     const r = this.params.radius;
     this.group.position.set(0, r, 0);
-    this.caster.scale.setScalar(r * 0.98);
     this.uniforms.uRadius.value = r;
     this.uniforms.uGrain.value = GRAIN_STD * this.params.grain;
     const u = this.uniforms;
@@ -440,8 +430,6 @@ export class Orb {
   dispose() {
     this.mesh.geometry.dispose();
     (this.mesh.material as THREE.Material).dispose();
-    this.caster.geometry.dispose();
-    (this.caster.material as THREE.Material).dispose();
     this.reflection.geometry.dispose();
     (this.reflection.material as THREE.Material).dispose();
     (this.uniforms.uMap.value as THREE.Texture).dispose();

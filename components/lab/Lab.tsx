@@ -52,9 +52,7 @@ export function Lab() {
     if (s0) saved.current = s0;
     const dir: DirectionId = saved.current.direction in DIRECTIONS ? saved.current.direction : "particles";
     const cfg = saved.current.configs[dir] ?? defaultsFor(dir);
-    const font = getComputedStyle(document.body).fontFamily;
-    const mono = getComputedStyle(document.documentElement).getPropertyValue("--font-mono-g").trim() || "ui-monospace";
-    const st = new Stage(box.current!, { ...cfg, direction: dir }, { font, mono: `${mono}, ui-monospace, monospace` });
+    const st = new Stage(box.current!, { ...cfg, direction: dir });
     setStage(st);
     setDirection(dir);
     setScene(st.config.scene);
@@ -159,16 +157,15 @@ export function Lab() {
       setBusy(null);
     }
   };
-  type ActionId = "scene-svg" | "copy-scene-svg" | "copy-png" | "copy-svg" | "layers" | "png" | "png-t" | "video" | "seq" | "cfg" | "import";
+  type ActionId = "scene-svg" | "copy-scene-svg" | "copy-png" | "layers" | "png" | "png-t" | "video" | "seq" | "cfg" | "import";
   const ACTIONS: { group: string; items: { id: ActionId; label: string; hint: string }[] }[] = [
     {
       group: "For Figma",
       items: [
-        { id: "scene-svg", label: "Scene as SVG", hint: "Grid, lines and cards as vectors · no orb" },
+        { id: "scene-svg", label: "Scene as SVG", hint: "Grid, lines and particles as vectors · no orb" },
         { id: "copy-scene-svg", label: "Copy scene as SVG", hint: "Paste into Figma as editable vectors" },
         { id: "copy-png", label: "Copy frame as PNG", hint: "Paste straight into Figma" },
-        { id: "copy-svg", label: "Copy cards as SVG", hint: "Editable text and shapes" },
-        { id: "layers", label: "Layers (.zip)", hint: "Floor · objects · orb · cards, transparent PNGs" },
+        { id: "layers", label: "Layers (.zip)", hint: "Floor · objects · orb, transparent PNGs" },
       ],
     },
     {
@@ -212,10 +209,6 @@ export function Lab() {
         case "copy-png":
           await navigator.clipboard.write([new ClipboardItem({ "image/png": stage.snapshot({ scale: 2 }) })]);
           flash("PNG copied. Paste it into Figma.");
-          break;
-        case "copy-svg":
-          await navigator.clipboard.writeText(stage.cardsSVG());
-          flash("SVG copied. Paste it into Figma for editable cards.");
           break;
         case "layers":
           download(await stage.exportLayers(2), name("layers.zip"));
