@@ -21,31 +21,42 @@ const LEFT = 172;
 const NEWEST = 209;
 const PITCH = 105;
 const PILL_TOP = 265;
+// on phones the cards keep their size, pinned to the bottom-left corner
+const INSET = 16;
+const CARD_H = 97;
+const PILL_H = 41;
 
 /** "listening" is the pill shown while the dust still floats, before Denoising cleans it up. */
 type Shown = SceneId | "listening";
 
-/** Cards for the scenes reached so far in the current step, top to bottom. */
-const stack = (scene: Shown): { id: Shown; top: number }[] => {
-  if (scene === "listening") return [{ id: scene, top: PILL_TOP }];
+/**
+ * Cards for the scenes reached so far in the current step, top to bottom: the newest at a fixed
+ * place, older ones stacked above it. On phones (`bottom`: where the card's foot sits, in css px)
+ * only the current scene's card shows.
+ */
+const stack = (scene: Shown, bottom?: number): { id: Shown; top: number }[] => {
+  if (scene === "listening") return [{ id: scene, top: bottom === undefined ? PILL_TOP : bottom - PILL_H }];
+  if (bottom !== undefined) return [{ id: scene, top: bottom - CARD_H }];
   const step = STEPS.find((s) => s.scenes.includes(scene))!;
   const shown = step.scenes.slice(0, step.scenes.indexOf(scene) + 1);
-  return shown.map((id, i) => ({
-    id,
-    top: NEWEST - PITCH * (shown.length - 1 - i),
-  }));
+  return shown.map((id, i) => ({ id, top: NEWEST - PITCH * (shown.length - 1 - i) }));
 };
 
 /** The scene cards floating beside the orb, laid over the stage. */
 export function SceneCards({
   scene,
   stage,
+  mobile = false,
 }: {
   scene: SceneId;
   stage: Stage | null;
+  /** phone layout: cards at full size in the bottom-left corner instead of scaling with the stage */
+  mobile?: boolean;
 }) {
   const root = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [size, setSize] = useState({ w: W, h: H });
+  const scale = size.w / W;
+  const bottom = mobile ? size.h - INSET : undefined;
   const [listening, setListening] = useState(false);
   const shown: Shown = scene === "denoise" && listening ? "listening" : scene;
   const [prev, setPrev] = useState(shown);
@@ -65,16 +76,16 @@ export function SceneCards({
   }, [stage, scene]);
 
   useEffect(() => {
-    const ro = new ResizeObserver(([e]) => setScale(e.contentRect.width / W));
+    const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }));
     ro.observe(root.current!);
     return () => ro.disconnect();
   }, []);
 
-  const cards = stack(shown);
+  const cards = stack(shown, bottom);
   if (shown !== prev) {
     // cards that drop out of the stack stay mounted, in place, while they fade
     setPrev(shown);
-    setLeaving(stack(prev).filter((c) => !cards.some((n) => n.id === c.id)));
+    setLeaving(stack(prev, bottom).filter((c) => !cards.some((n) => n.id === c.id)));
   }
 
   useEffect(() => {
@@ -90,7 +101,7 @@ export function SceneCards({
     >
       <div
         className="absolute left-0 top-0 origin-top-left"
-        style={{ width: W, height: H, transform: `scale(${scale})` }}
+        style={mobile ? { width: "100%", height: "100%" } : { width: W, height: H, transform: `scale(${scale})` }}
       >
         <div className="scene-cards-float absolute inset-0">
           {[
@@ -102,7 +113,7 @@ export function SceneCards({
             <div
               key={id}
               className="absolute transition-transform duration-700 ease-[cubic-bezier(.2,.7,.2,1)]"
-              style={{ left: LEFT, top: 0, transform: `translateY(${top}px)` }}
+              style={{ left: mobile ? INSET : LEFT, top: 0, transform: `translateY(${top}px)` }}
             >
               {id === "listening" ? (
                 <div
