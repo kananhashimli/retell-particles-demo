@@ -74,6 +74,10 @@ export class Stage {
   private morphFrom: Active | null = null;
   private onFrame?: () => void;
   private lookKey = "";
+  /** resolves once the orb's data has loaded and the scene's shaders are compiled; the stage then fades in */
+  readonly ready: Promise<void>;
+  private loaded = false;
+  private shown = false;
 
   constructor(container: HTMLElement, config: DeepPartial<StageConfig> = {}) {
     this.container = container;
@@ -83,7 +87,8 @@ export class Stage {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: "high-performance" });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     const gl = this.renderer.domElement;
-    gl.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block";
+    // hidden until everything it draws is ready, then faded in at once rather than piece by piece
+    gl.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;opacity:0;transition:opacity 0.9s cubic-bezier(.2,.7,.2,1)";
     container.appendChild(gl);
 
     this.orb = new Orb({ ...this.config.orb });
@@ -96,6 +101,12 @@ export class Stage {
     this.resize();
     this.applyConfig({}, true);
     this.setScene(this.config.scene, { instant: true });
+    // never wait forever: a slow network or a stuck compile still fades in after a few seconds
+    const timeout = new Promise<void>((done) => setTimeout(done, 5000));
+    const loaded = Promise.all([this.orb.ready, this.renderer.compileAsync(this.scene, this.camera)]).then(() => {}, () => {});
+    this.ready = Promise.race([loaded, timeout]).then(() => {
+      this.loaded = true;
+    });
     this.last = performance.now();
     this.raf = requestAnimationFrame(this.loop);
   }
@@ -313,9 +324,14 @@ export class Stage {
     // backwards and fire "loop" at once, skipping the opening scene
     const dt = Math.max(0, Math.min((now - this.last) / 1000, 0.1));
     this.last = now;
-    if (this.frozen || !this.onScreen) return;
+    // the scene's clock starts only once it can be seen whole
+    if (this.frozen || !this.onScreen || !this.loaded) return;
     this.step(this.config.playing ? dt * this.config.speed : 0);
     this.render();
+    if (!this.shown) {
+      this.shown = true;
+      this.renderer.domElement.style.opacity = "1";
+    }
     this.onFrame?.();
   };
 

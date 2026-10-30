@@ -47,11 +47,14 @@ export function SceneCards({
   scene,
   stage,
   mobile = false,
+  show = true,
 }: {
   scene: SceneId;
   stage: Stage | null;
   /** phone layout: cards at full size in the bottom-left corner instead of scaling with the stage */
   mobile?: boolean;
+  /** false holds the cards back, e.g. until the stage has loaded; they rise in once it turns true */
+  show?: boolean;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: W, h: H });
@@ -102,6 +105,7 @@ export function SceneCards({
       <div
         className="absolute left-0 top-0 origin-top-left"
         style={mobile ? { width: "100%", height: "100%" } : { width: W, height: H, transform: `scale(${scale})` }}
+        hidden={!show}
       >
         <div className="scene-cards-float absolute inset-0">
           {[

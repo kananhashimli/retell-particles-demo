@@ -28,22 +28,31 @@ const cameraFor = (mobile: boolean) => (mobile ? { ...CONFIG.camera, zoom: CONFI
 export function FlowSection() {
   const box = useRef<HTMLDivElement>(null);
   const [stage, setStage] = useState<Stage | null>(null);
+  // the cards wait for the stage, so the whole section fades in together
+  const [ready, setReady] = useState(false);
   const [scene, setScene] = useState<SceneId>(CONFIG.scene);
   const mobile = useMobile();
 
   useEffect(() => {
-    let st: Stage;
+    let st: Stage | null = null;
     try {
       st = new Stage(box.current!, { ...CONFIG, camera: cameraFor(matchMedia(MOBILE).matches) });
     } catch (e) {
       // no WebGL: the tabs and cards still work over the plain background
       console.error(e);
-      return;
+    }
+    let alive = true;
+    (st?.ready ?? Promise.resolve()).then(() => alive && setReady(true));
+    if (!st) {
+      return () => {
+        alive = false;
+      };
     }
     setStage(st);
     const offScene = st.on("scene", (id) => setScene(id));
     const offLoop = st.on("loop", (id) => st.applyConfig({ scene: SCENE_ORDER[(SCENE_ORDER.indexOf(id) + 1) % SCENE_ORDER.length] }));
     return () => {
+      alive = false;
       offScene();
       offLoop();
       st.dispose();
@@ -68,7 +77,7 @@ export function FlowSection() {
       <div className="grid gap-10 lg:grid-cols-[minmax(0,876fr)_minmax(300px,456fr)] lg:gap-[60px]">
         <div className="relative aspect-square overflow-hidden rounded-[32px] md:aspect-[876/678]" style={{ background: CONFIG.background }}>
           <div ref={box} className="absolute inset-0" />
-          <SceneCards scene={scene} stage={stage} mobile={mobile} />
+          <SceneCards scene={scene} stage={stage} mobile={mobile} show={ready} />
         </div>
         <FlowTabs scene={scene} onScene={pickScene} progress={progress} autoplay />
       </div>
