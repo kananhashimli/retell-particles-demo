@@ -5,7 +5,9 @@ An animated section for Retell: the Retell orb on an isometric floor, with parti
 (Colloquial, Retell voices). Scenes play on their own and morph into one another; the tabs beside
 the stage jump to any scene.
 
-- `/` – the section as it will ship.
+- `/` – the section as it will ship: scenes play on their own.
+- `/scroll` – the same section driven by scrolling: it stays on screen while the page scrolls past,
+  scroll position picks the scene, and the tabs scroll the page to their scene.
 - `/dev` – the lab: every setting of the stage, scene and transition, plus exports for Figma
   (SVG, layered PNGs, PNG sequences, video loops).
 
@@ -32,6 +34,8 @@ development; in a production build the button reports that it's disabled.
 ## Where things are
 
 - `components/FlowSection.tsx` – the homepage section: stage, tabs and scene cards.
+- `components/ScrollSection.tsx` – the scroll-driven version on `/scroll`.
+- `components/useFlowStage.tsx` – the stage setup both share (phone framing, fade-in, scene state).
 - `lib/stage/` – the stage engine (three.js). See `lib/stage/README.md` for how scenes are written.
 - `lib/stage/directions/particles.ts` – the six particle scenes.
 - `lib/stage/morph.ts` – the particle morph between scenes.

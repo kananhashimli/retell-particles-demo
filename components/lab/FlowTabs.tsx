@@ -10,10 +10,24 @@ interface Props {
   /** returns 0..1 through the current loop; polled for the progress line */
   progress: () => number;
   autoplay: boolean;
+  /** false leaves out the response-time note, for tight spaces */
+  note?: boolean;
+}
+
+/** The response-time note at the foot of the tabs; shown on its own where the tabs leave it out. */
+export function ResponseNote({ className = "" }: { className?: string }) {
+  return (
+    <div className={`text-[14px] tracking-[-0.01em] ${className}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/icons/gauge.svg" alt="" width={24} height={24} />
+      <p className="mt-3 leading-normal text-black">~600ms response time</p>
+      <p className="mt-2 max-w-[295px] leading-[19px] text-black/50">Keep conversations flowing with fast, natural responses.</p>
+    </div>
+  );
 }
 
 /** Listen / Think / Speak, as in the design: the open step shows its copy and sub-steps. */
-export function FlowTabs({ scene, onScene, progress, autoplay }: Props) {
+export function FlowTabs({ scene, onScene, progress, autoplay, note = true }: Props) {
   const active = SCENES[scene].step;
   const bar = useRef<HTMLSpanElement>(null);
 
@@ -88,12 +102,7 @@ export function FlowTabs({ scene, onScene, progress, autoplay }: Props) {
           );
         })}
       </div>
-      <div className="mt-auto pt-8 text-[14px] md:pt-10 tracking-[-0.01em]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icons/gauge.svg" alt="" width={24} height={24} />
-        <p className="mt-3 leading-normal text-black">~600ms response time</p>
-        <p className="mt-2 max-w-[295px] leading-[19px] text-black/50">Keep conversations flowing with fast, natural responses.</p>
-      </div>
+      {note && <ResponseNote className="mt-auto pt-8 md:pt-10" />}
     </div>
   );
 }
