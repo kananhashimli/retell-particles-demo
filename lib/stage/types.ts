@@ -179,8 +179,7 @@ export interface FrameInfo {
   dt: number;
   /** 0..1 enter / exit */
   presence: number;
-  /** whether to fade in at the loop's start / out at its end; off when a morph or the next scene takes over */
-  loopIn: boolean;
+  /** whether the scene closes its loop (it will play again): off when a morph or the next scene takes over at its end */
   loopOut: boolean;
 }
 

@@ -123,7 +123,7 @@
     "turns": {
       "radius": 2.65,
       "height": 0.425,
-      "cycles": 64,
+      "cycles": 72,
       "width": 1.5,
       "wordLength": 0.51,
       "wordGap": 0.15,
@@ -155,7 +155,7 @@
       "dotSize": 1.85,
       "dotOpacity": 1,
       "shimmer": 0.005,
-      "rotation": 59,
+      "rotation": 64,
       "spin": 14.5,
       "own_size": false,
       "p_size": 1.5,
@@ -182,7 +182,8 @@
       "markerWidth": 1.35,
       "markerColor": "#1A1C22",
       "markerOpacity": 0.25,
-      "lineColor": "#b2b5c0"
+      "lineColor": "#b2b5c0",
+      "previous": 0.35
     },
     "llm": {
       "rings": 4,

@@ -27,8 +27,6 @@ interface Active {
   scope: { presence: number };
   age: number;
   leaving: boolean;
-  /** arrived by a morph: no fade-in at the start of its first loop */
-  morphIn: boolean;
   /** the morph's source: hidden, but kept running at full strength so its dots leave moving */
   morphOut: boolean;
   /** has drawn at least one frame */
@@ -260,7 +258,7 @@ export class Stage {
     // arriving by a morph, its clock starts early: it moves the whole time the dots fly in, and reaches
     // t = 0 as they land, so the morph never eats into its opening (scenes read t < 0 as "not started yet")
     const age = morphIn ? -this.config.transition.duration : 0;
-    const a: Active = { id, def, inst, group, orb, scope, age, leaving: false, morphIn, morphOut: false, drawn: false };
+    const a: Active = { id, def, inst, group, orb, scope, age, leaving: false, morphOut: false, drawn: false };
     if (morphIn) {
       // the old scene's dots become the morph; the old scene runs on unseen until it lands
       current!.group.visible = false;
@@ -356,7 +354,6 @@ export class Stage {
         age: a.age,
         dt,
         presence: a.morphOut ? 1 : a.scope.presence,
-        loopIn: !(a.morphIn && a.age < d),
         loopOut: !a.morphOut && !this.advances,
       });
       a.drawn = true;

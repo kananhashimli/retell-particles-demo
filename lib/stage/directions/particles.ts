@@ -33,14 +33,14 @@ function palette(ctx: SceneContext) {
 // ------------------------------------------------------------------ shared particle look
 /** dots per unit of ring at density 1 — the Retell LLM rings, the reference for every scene */
 const DOTS_PER_UNIT = 42;
+/** Whole dot gaps a ring of n dots at radius r moves per loop, at `speed` units/s along the ring (like Denoising's lanes). */
+const ringSteps = (speed: number, r: number, n: number, D: number) => Math.round((speed * D) / r / (TAU / n));
 /**
- * How far a ring of n dots at radius r has turned at t: `speed` units/s along the ring, like Denoising's lanes,
- * rounded to whole dot gaps per loop so every dot ends on a neighbour's starting place and the loop stays seamless.
+ * Which dot's grain the j-th dot of a ring wears in loop `loop`, when the ring moves `steps` gaps a loop. Dots
+ * differ in size and scatter, so a dot ending the loop on a neighbour's place must take over that neighbour's
+ * grain as the next loop starts, or the whole ring would change at once at the wrap.
  */
-function ringTurn(speed: number, r: number, n: number, t: number, D: number) {
-  const gap = TAU / n;
-  return (Math.round((speed * D) / r / gap) * gap * t) / D;
-}
+const ringSlot = (start: number, n: number, j: number, steps: number, loop: number) => start + ((((j - loop * steps) % n) + n) % n);
 /**
  * Per-scene overrides of the shared particle look. Each setting has an "own" switch: off follows
  * "Particles · all scenes", on uses the value next to it. The stage merges them into ctx.particles.
@@ -128,31 +128,38 @@ const denoise: SceneDef = {
     const streaks = kit.streaks(N);
     group.add(dust, streaks);
     const rand = rng(3);
+    // the noise wobbles at whole cycles per loop, so the cloud is the same at the end as at the start
+    const cycles = (w: number) => (Math.max(1, Math.round((w * D) / TAU)) * TAU) / D;
     const parts = Array.from({ length: N }, (_, i) => {
       const r = Math.sqrt(lerp((R * 1.25) ** 2, P0.outer ** 2, rand()));
       const rl = R * 1.25 + Math.round((r - R * 1.25) / P0.lanes) * P0.lanes;
-      return { r, rl, a: rand() * TAU, y: 0.05 + Math.pow(rand(), 1.7) * P0.cloud, f: 0.7 + rand() * 1.4, g: grain(i) };
+      const f = 0.7 + rand() * 1.4;
+      const w = [1.3, 2.1, 5.3, 4.7, 3.1, 7].map((k) => cycles(f * k));
+      return { r, rl, a: rand() * TAU, y: 0.05 + Math.pow(rand(), 1.7) * P0.cloud, w, g: grain(i) };
     });
     const off = [0, 0];
 
     return {
-      update({ t, presence, loopIn, loopOut }) {
+      update({ t, age, presence, loopOut }) {
         const C = palette(ctx);
         const P = params<typeof DENOISE>(ctx);
         const L = ctx.particles;
         const W = t < P.waveStart ? 0 : R * 1.1 + easeOut((t - P.waveStart) / P.waveTime) * (P0.outer + P.front + 0.2 - R * 1.1);
         // the loop starts and ends empty, unless a morph brings the dots in or the next scene takes them
-        const fade = win(t, loopIn ? 0 : -Infinity, loopOut ? D : Infinity, 0.5, 0.7) * presence;
+        // looping, the lanes fade out at the end and the noisy cloud fades back in; the first pass needs no fade-in
+        // (it arrives by a morph, or with the stage's own fade-in), and a scene handing over keeps its lanes
+        const again = age - t > D / 2;
+        const fade = win(t, again ? 0 : -Infinity, loopOut ? D : Infinity, 0.5, 0.7) * presence;
         for (let i = 0; i < N; i++) {
           const p = parts[i];
           const c = easeInOut(smooth(p.r - P.front * 0.3, p.r + P.front * 0.7, W));
           // noise: jitter around a home point
-          const jt = t * p.f, ph = p.g.ph * 16;
-          const ca = p.a + Math.sin(jt * 1.3 + ph) * 0.1;
-          const cr = p.r + Math.sin(jt * 2.1 + ph * 1.7) * P.jitter * 2;
-          const cx = Math.cos(ca) * cr + Math.sin(jt * 5.3 + ph) * P.jitter;
-          const cz = Math.sin(ca) * cr + Math.cos(jt * 4.7 + ph) * P.jitter;
-          const cy = p.y + Math.sin(jt * 3.1 + ph * 2.3) * P.bob;
+          const ws = p.w, ph = p.g.ph * 16;
+          const ca = p.a + Math.sin(t * ws[0] + ph) * 0.1;
+          const cr = p.r + Math.sin(t * ws[1] + ph * 1.7) * P.jitter * 2;
+          const cx = Math.cos(ca) * cr + Math.sin(t * ws[2] + ph) * P.jitter;
+          const cz = Math.sin(ca) * cr + Math.cos(t * ws[3] + ph) * P.jitter;
+          const cy = p.y + Math.sin(t * ws[4] + ph * 2.3) * P.bob;
           // calm: lanes flowing round just above the floor, with the shared idle wiggle
           wiggle(L, p.g, t, D, off);
           const rl = p.rl + off[0], ly = 0.02 + off[1];
@@ -162,7 +169,7 @@ const denoise: SceneDef = {
           const tx = lerp(x, Math.cos(ta) * rl, c), tz = lerp(z, Math.sin(ta) * rl, c);
           const vis = inOrb(x, y, z, R) ? 0 : 1;
           const near = 1 - smooth(R * 1.2, P0.outer, p.rl);
-          dust.set(i, x, y, z, L.size * p.g.s, C.ink, (1 - c) * P.dotOpacity * fade * vis * (0.75 + 0.25 * Math.sin(jt * 7 + ph)));
+          dust.set(i, x, y, z, L.size * p.g.s, C.ink, (1 - c) * P.dotOpacity * fade * vis * (0.75 + 0.25 * Math.sin(t * ws[5] + ph)));
           streaks.set(i, tx, ly, tz, x, y, z, L.size * p.g.s, mix3(C.accent, C.high, near * 0.6), c * P.streakOpacity * fade * vis * (0.55 + 0.45 * near));
         }
         streaks.tail = P.tail;
@@ -189,6 +196,8 @@ function ringPts(out: Float32Array, n: number, r: number, y0: number, f: (a: num
 // As in Line: one ring is the conversation and a playhead writes it as it happens. The caller's
 // voice is a grey wave line; the agent's voice is the same kind of wave, drawn in blue particles.
 // Quiet stretches stay flat. Rotate the ring to put the hand-offs where they read best.
+// The call is the same every loop, so after the first pass the ring stays drawn: the playhead writes
+// over the previous pass, which dims with age like a radar sweep, and the loop never has to restart.
 const TURNS_P = {
   rotation: { value: 0, min: -180, max: 180, step: 1, label: "rotation °" },
   spin: { value: 3, min: -30, max: 30, step: 0.5, label: "spin °/s" },
@@ -202,6 +211,7 @@ const TURNS_P = {
   lineColor: { value: "#1A1C22", label: "caller colour" },
   lineOpacity: { value: 0.85, min: 0, max: 1, step: 0.01, label: "caller opacity" },
   dotOpacity: { value: 1, min: 0, max: 1, step: 0.01, label: "agent opacity" },
+  previous: { value: 0.35, min: 0, max: 1, step: 0.01, label: "previous pass" },
   guide: { value: true, label: "guide ring" },
   guideOpacity: { value: 0.2, min: 0, max: 1, step: 0.01, label: "guide opacity" },
   playhead: { value: true },
@@ -236,11 +246,13 @@ const turns: SceneDef = {
     // samples round the ring; the agent's dots sit on these, so density sets how many
     const STEPS = Math.max(400, Math.round(1600 * ctx.particles.density));
     const MAXRUNS = 24;
+    // vertex colours: the line dims toward the background along the ring, by how long ago each part was written
     const runs = Array.from({ length: MAXRUNS }, () => {
-      const l = kit.line(STEPS, { width: 1.4, color: look.ink });
+      const l = kit.line(STEPS, { width: 1.4, vertexColors: true });
       group.add(l);
       return l;
     });
+    const lcol = new Float32Array(STEPS * 3);
     const dots = kit.particles(STEPS);
     group.add(dots);
     const grains = Array.from({ length: STEPS }, (_, i) => grain(i));
@@ -295,14 +307,20 @@ const turns: SceneDef = {
         const angle = (tt: number) => a0 + (tt / D) * TAU;
         const r = P.radius * R;
         sample(P.wordLength, P.wordGap, P.pauses);
-        const fadeAll = 1 - smooth(9.45, 9.95, t);
-        const upto = Math.min(STEPS, Math.floor((t / D) * STEPS) + 1);
+        // the first pass draws the ring as it goes; after that it is whole, the playhead rewriting it
+        const first = age < D;
+        const upto = first ? Math.min(STEPS, Math.floor((t / D) * STEPS) + 1) : STEPS;
+        // how bright the part written at time tw is now: fresh behind the playhead, dimmest just ahead of it
+        const fresh = (tw: number) => 1 - (1 - P.previous) * ((((t - tw) % D) + D) % D) / D;
+        const lineLin = kit.linear(P.lineColor), bgLin = kit.linear(look.bg);
         const cyc = Math.round(P.cycles);
         for (let i = 0; i < upto; i++) {
           const a = angle((i / STEPS) * D);
           pos[i * 3] = Math.cos(a) * r;
           pos[i * 3 + 1] = 0.015 + level[i] * P.height * Math.sin(cyc * (a - a0));
           pos[i * 3 + 2] = Math.sin(a) * r;
+          const f = fresh((i / STEPS) * D);
+          for (let c = 0; c < 3; c++) lcol[i * 3 + c] = lerp(bgLin[c], lineLin[c], f);
         }
         // caller + quiet: wave line, one run per stretch between agent turns
         callerRuns.forEach(([s, e], k) => {
@@ -313,10 +331,9 @@ const turns: SceneDef = {
             l.opacity = 0;
             return;
           }
-          l.setPoints(pos.subarray(s * 3, stop * 3));
+          l.setPoints(pos.subarray(s * 3, stop * 3), lcol.subarray(s * 3, stop * 3));
           l.material.linewidth = P.lineWidth;
-          l.material.color.set(P.lineColor);
-          l.opacity = P.lineOpacity * presence * fadeAll;
+          l.opacity = P.lineOpacity * presence;
         });
         for (let k = callerRuns.length; k < MAXRUNS; k++) runs[k].opacity = 0;
         // agent: the same wave, drawn in particles with the shared size, scatter and idle wiggle
@@ -328,7 +345,7 @@ const turns: SceneDef = {
           const g = grains[i];
           wiggle(L, g, t, D, off);
           const a = angle((i / STEPS) * D);
-          dots.set(i, Math.cos(a) * (r + off[0]), pos[i * 3 + 1] + off[1], Math.sin(a) * (r + off[0]), L.size * g.s, mix3(C.accent, C.high, 0.15), P.dotOpacity * presence * fadeAll);
+          dots.set(i, Math.cos(a) * (r + off[0]), pos[i * 3 + 1] + off[1], Math.sin(a) * (r + off[0]), L.size * g.s, mix3(C.accent, C.high, 0.15), P.dotOpacity * presence * fresh((i / STEPS) * D));
         }
         dots.commit();
 
@@ -341,7 +358,7 @@ const turns: SceneDef = {
         head.material.color.set(P.playheadColor);
         head.opacity = P.playhead ? P.playheadOpacity * presence : 0;
         marks.forEach((m) => {
-          const w = t > m.t ? fadeAll * presence * easeOut((t - m.t) / 0.3) : 0;
+          const w = first && t <= m.t ? 0 : presence * fresh(m.t) * (first ? easeOut((t - m.t) / 0.3) : 1);
           m.l.setPoints([at(r + 0.12, angle(m.t)), at(r + 0.12 + P.markerLength, angle(m.t))]);
           m.l.material.linewidth = P.markerWidth;
           m.l.material.color.set(P.markerColor);
@@ -466,9 +483,11 @@ const flow: SceneDef = {
     const S = Math.round(P0.steps);
     const radii = Array.from({ length: S }, (_, i) => R * P0.inner + i * P0.spacing);
     const counts = radii.map((r) => ringCount(ctx, r));
-    const pts: { ring: number; a: number; g: Grain }[] = [];
+    const pts: { ring: number; j: number; a: number; g: Grain }[] = [];
+    const starts = radii.map(() => 0);
     radii.forEach((r, ring) => {
-      for (let j = 0; j < counts[ring]; j++) pts.push({ ring, a: (j / counts[ring]) * TAU, g: grain(pts.length) });
+      starts[ring] = pts.length;
+      for (let j = 0; j < counts[ring]; j++) pts.push({ ring, j, a: (j / counts[ring]) * TAU, g: grain(pts.length) });
     });
     const field = kit.particles(pts.length);
     group.add(field);
@@ -476,12 +495,12 @@ const flow: SceneDef = {
     const off = [0, 0];
 
     return {
-      update({ t, presence, loopOut }) {
+      update({ t, age, presence, loopOut }) {
         const C = palette(ctx);
         const P = params<typeof FLOW_P>(ctx);
         const L = ctx.particles;
         const a0 = THREE.MathUtils.degToRad(P.start);
-        // fades out to restart the loop, unless the next scene takes over from the finished rings
+        // the finished rings turn back to grey to restart the loop, unless the next scene takes over from them
         const end = loopOut ? 1 - smooth(9.2, 9.9, t) : 1;
         // per step: run round (65%), then a check flash
         const state = radii.map((_, i) => {
@@ -490,9 +509,12 @@ const flow: SceneDef = {
           const flash = t > s0 + span * 0.65 ? Math.exp(-(t - s0 - span * 0.65) / 0.25) : 0;
           return { run, flash, active: t >= s0 && t < s0 + span * 0.65 };
         });
-        const turn = radii.map((r, ring) => (ring % 2 ? -1 : 1) * ringTurn(P.ringSpeed, r, counts[ring], t, D));
+        const steps = radii.map((r, ring) => (ring % 2 ? -1 : 1) * ringSteps(P.ringSpeed, r, counts[ring], D));
+        const turn = steps.map((k, ring) => (k * (TAU / counts[ring]) * t) / D);
+        const loop = Math.round((age - t) / D);
         for (let i = 0; i < pts.length; i++) {
-          const { ring, g } = pts[i];
+          const { ring, j } = pts[i];
+          const g = pts[ringSlot(starts[ring], counts[ring], j, steps[ring], loop)].g;
           const s = state[ring];
           // drift round the ring, alternating direction
           const a = pts[i].a + turn[ring];
@@ -503,11 +525,12 @@ const flow: SceneDef = {
           const ahead = s.run - along;
           const head = s.active && ahead >= 0 ? Math.exp(-ahead / (P.comet * 0.12)) : 0;
           const k = Math.max(head, lit * (s.run >= 1 ? 1 : 0.55));
-          const pulse = s.flash * P.flash;
-          const size = L.size * lerp(1, L.emphasis, Math.max(head, lit * 0.5)) * g.s * (1 + pulse * 0.4);
-          const op = Math.max(P.opacity, lit * (s.run >= 1 ? P.doneOpacity : P.doneOpacity * 0.8), head * P.litOpacity) * (1 + pulse * 0.4);
-          const col = k > 0.02 ? mix3(C.accent, C.high, head * 0.5) : C.ink;
-          field.set(i, Math.cos(a) * r, 0.02 + off[1] + pulse * 0.05, Math.sin(a) * r, size, col, Math.min(1, op) * end * presence);
+          const pulse = s.flash * P.flash * end;
+          const size = L.size * lerp(1, L.emphasis, Math.max(head, lit * 0.5) * end) * g.s * (1 + pulse * 0.4);
+          const op = Math.max(P.opacity, lerp(P.opacity, Math.max(lit * (s.run >= 1 ? P.doneOpacity : P.doneOpacity * 0.8), head * P.litOpacity), end)) * (1 + pulse * 0.4);
+          // lit dots are blue; at the loop's end they ease back to the resting grey
+          const col = mix3(C.ink, mix3(C.accent, C.high, head * 0.5), Math.min(1, k / 0.02) * end);
+          field.set(i, Math.cos(a) * r, 0.02 + off[1] + pulse * 0.05, Math.sin(a) * r, size, col, Math.min(1, op) * presence);
         }
         field.commit();
       },
@@ -618,6 +641,7 @@ const VOICES_P = {
   ringSpeed: { value: 0.35, min: 0, max: 2, step: 0.01, label: "ring speed" },
   fade: { value: 0.35, min: 0.05, max: 0.9, step: 0.01, label: "unmute s" },
   lead: { value: 0.8, min: 0, max: 3, step: 0.05, label: "all muted s" },
+  tail: { value: 0.6, min: 0, max: 3, step: 0.05, label: "muted at end s" },
   opacity: { value: 0.32, min: 0, max: 1, step: 0.01, label: "muted opacity" },
   activeOpacity: { value: 1, min: 0, max: 1, step: 0.01, label: "voice opacity" },
   tint: { value: true, label: "tint orb per voice" },
@@ -644,30 +668,37 @@ const voices: SceneDef = {
     const NV = VOICES.length;
     const radii = Array.from({ length: NV }, (_, i) => R * P0.inner + i * P0.spacing);
     const counts = radii.map((r) => ringCount(ctx, r));
-    const pts: { ring: number; a: number; g: Grain }[] = [];
+    const pts: { ring: number; j: number; a: number; g: Grain }[] = [];
+    const starts = radii.map(() => 0);
     radii.forEach((r, ring) => {
-      for (let j = 0; j < counts[ring]; j++) pts.push({ ring, a: (j / counts[ring]) * TAU, g: grain(pts.length) });
+      starts[ring] = pts.length;
+      for (let j = 0; j < counts[ring]; j++) pts.push({ ring, j, a: (j / counts[ring]) * TAU, g: grain(pts.length) });
     });
     const field = kit.particles(pts.length);
     group.add(field);
     const off = [0, 0];
 
     return {
-      update({ t, presence }) {
+      update({ t, age, presence }) {
         const C = palette(ctx);
         const P = params<typeof VOICES_P>(ctx);
         const L = ctx.particles;
-        // all rings muted for the lead-in (and past the loop's end), then one voice at a time
-        const step = (D - Math.min(P.lead, D - 1)) / NV;
-        const u = t - (D - step * NV);
-        const vi = u >= 0 && t < D ? Math.min(NV - 1, Math.floor(u / step)) : -1;
+        // all rings muted for the lead-in, then one voice at a time, then muted again for the tail, while the
+        // orb eases back to its own colour, so both sides of the loop's wrap match
+        const span = Math.max(1, D - P.lead - P.tail);
+        const step = span / NV;
+        const u = t - P.lead;
+        const vi = u >= 0 && u < span ? Math.min(NV - 1, Math.floor(u / step)) : -1;
         const local = u - vi * step;
         const on = radii.map((_, i) => (i === vi ? win(local, 0, step, P.fade, P.fade) : 0));
         const level = radii.map((_, i) => 0.3 + 0.7 * speech(t, i * 5));
         const spin = (TAU * t * P.drift) / D;
-        const turn = radii.map((r, ring) => (ring % 2 ? -1 : 1) * ringTurn(P.ringSpeed, r, counts[ring], t, D));
+        const steps = radii.map((r, ring) => (ring % 2 ? -1 : 1) * ringSteps(P.ringSpeed, r, counts[ring], D));
+        const turn = steps.map((k, ring) => (k * (TAU / counts[ring]) * t) / D);
+        const loop = Math.round((age - t) / D);
         for (let i = 0; i < pts.length; i++) {
-          const { ring, a, g } = pts[i];
+          const { ring, j, a } = pts[i];
+          const g = pts[ringSlot(starts[ring], counts[ring], j, steps[ring], loop)].g;
           wiggle(L, g, t, D, off);
           const r = radii[ring] + off[0];
           const o = on[ring];
