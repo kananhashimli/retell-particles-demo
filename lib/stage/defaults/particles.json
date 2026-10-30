@@ -10,7 +10,7 @@
   "grid": {
     "style": "lines",
     "color": "#1A1C22",
-    "opacity": 0.06,
+    "opacity": 0.1,
     "cell": 1,
     "width": 1,
     "major": 0,
@@ -39,7 +39,7 @@
     "brightness": 0,
     "crop": 1.06,
     "shade": "#0D39BD",
-    "shadeAmount": 1,
+    "shadeAmount": 0.8,
     "reflection": 0.6
   },
   "light": {
