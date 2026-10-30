@@ -1,26 +1,106 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #ffffff;
+  --ink: #141518;
+  --muted: #6b6e76;
+  --line: #ebebf0;
+  --card: #f5f5f8;
+  --accent: #3e6aef;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-card: var(--card);
+  --color-accent: var(--accent);
+  --font-sans: var(--font-untitled), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-serif), ui-serif, Georgia, serif;
+  --font-mono: var(--font-mono-g), ui-monospace, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+/* Tweakpane, light and quiet to sit next to the page */
+.tp-host {
+  --tp-base-background-color: #ffffff;
+  --tp-base-shadow-color: transparent;
+  --tp-button-background-color: #141518;
+  --tp-button-background-color-active: #2a2c31;
+  --tp-button-background-color-focus: #2a2c31;
+  --tp-button-background-color-hover: #2a2c31;
+  --tp-button-foreground-color: #ffffff;
+  --tp-container-background-color: rgba(20, 21, 24, 0.04);
+  --tp-container-background-color-active: rgba(20, 21, 24, 0.1);
+  --tp-container-background-color-focus: rgba(20, 21, 24, 0.08);
+  --tp-container-background-color-hover: rgba(20, 21, 24, 0.07);
+  --tp-container-foreground-color: #141518;
+  --tp-groove-foreground-color: rgba(20, 21, 24, 0.12);
+  --tp-input-background-color: rgba(20, 21, 24, 0.045);
+  --tp-input-background-color-active: rgba(20, 21, 24, 0.1);
+  --tp-input-background-color-focus: rgba(20, 21, 24, 0.08);
+  --tp-input-background-color-hover: rgba(20, 21, 24, 0.07);
+  --tp-input-foreground-color: #141518;
+  --tp-label-foreground-color: rgba(20, 21, 24, 0.6);
+  --tp-monitor-background-color: rgba(20, 21, 24, 0.04);
+  --tp-monitor-foreground-color: rgba(20, 21, 24, 0.7);
+  --tp-base-font-family: var(--font-sans);
+}
+.tp-host .tp-rotv {
+  font-size: 11.5px;
+}
+
+/* Scene cards over the stage: rise in, fade up and away, drift gently while shown */
+@keyframes scene-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+    filter: blur(4px);
   }
 }
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes scene-cards-float {
+  50% {
+    transform: translateY(-5px);
+  }
+}
+.scene-card {
+  animation: scene-card-in 0.7s 0.2s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  transition:
+    opacity 0.45s ease,
+    transform 0.45s ease,
+    filter 0.45s ease;
+}
+.scene-card-out {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.98);
+  filter: blur(4px);
+}
+.scene-cards-float {
+  animation: scene-cards-float 6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-card,
+  .scene-cards-float {
+    animation: none;
+  }
+}
+@keyframes scene-pill-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+.scene-pill-spin {
+  animation: scene-pill-spin 2.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-pill-spin {
+    animation: none;
+  }
 }
