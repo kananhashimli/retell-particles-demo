@@ -236,7 +236,7 @@
       "start": 110,
       "dotSize": 1.3,
       "litSize": 4.35,
-      "opacity": 0.22,
+      "opacity": 0.5,
       "litOpacity": 1,
       "doneOpacity": 1,
       "comet": 0.66,
@@ -271,7 +271,8 @@
       "own_active": false,
       "p_active": "#3E6AEF",
       "own_highlight": false,
-      "p_highlight": "#3E8CF7"
+      "p_highlight": "#3E8CF7",
+      "ringSpeed": 0.35
     },
     "voices": {
       "inner": 1.13,

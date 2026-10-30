@@ -255,7 +255,7 @@ export class Stage {
         this.morphFrom = fromScene;
       }
       scope.presence = 1;
-      this.morph = new Morph(from!, targets, { ...this.config.transition }, this.resolution);
+      this.morph = new Morph(from!, targets, { ...this.config.transition }, this.resolution, this.pointScale);
       this.scene.add(this.morph.group);
     }
     this.active.push(a);

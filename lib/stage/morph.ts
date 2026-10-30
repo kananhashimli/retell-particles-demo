@@ -1,5 +1,6 @@
 // Scene-to-scene morph for particle scenes: every dot on screen when the scene changes flies to a
-// dot of the next scene, round the orb rather than through it, drawing a short fading trail.
+// dot of the next scene, round the orb rather than through it, drawing a short fading trail. The dots
+// in flight use the same shader as the scenes' own particles, so nothing changes when they hand over.
 //
 // Both ends are read live every frame: the old scene keeps running underneath (hidden), so its dots
 // leave with the speed they had, and the next scene's dots are where they land. A morph cut short
@@ -9,7 +10,7 @@
 
 import * as THREE from "three";
 import { Particles, Streaks } from "./kit";
-import { clamp, easeInOut, hash, lerp } from "./util";
+import { clamp, easeInOut, hash, lerp, smooth } from "./util";
 
 export interface MorphLook {
   /** seconds */
@@ -121,7 +122,8 @@ function visible(d: Dots, pxScale: number) {
 export class Morph {
   /** draws the dots in flight; add it to the scene */
   readonly group = new THREE.Group();
-  private streaks: Streaks | null = null;
+  private dots: Particles | null = null;
+  private trails: Streaks | null = null;
   private p = 0;
   private links: {
     n: number;
@@ -143,6 +145,7 @@ export class Morph {
     target: Field[],
     private look: MorphLook,
     private resolution: THREE.Vector2,
+    private pointScale: { value: number },
   ) {
     this.target = liveDots(target);
     this.group.name = "morph";
@@ -182,8 +185,9 @@ export class Morph {
     this.carried = new Uint8Array(this.target.n);
     for (const i of t) this.carried[i] = 1;
     if (n) {
-      this.streaks = new Streaks(n, this.resolution, 0);
-      this.group.add(this.streaks);
+      this.trails = new Streaks(n, this.resolution, 0);
+      this.dots = new Particles(n, this.pointScale);
+      this.group.add(this.trails, this.dots);
     }
   }
 
@@ -207,8 +211,8 @@ export class Morph {
       out[1] = lerp(sd.y, td.y, e);
       out[2] = Math.sin(a) * r;
     };
-    const st = this.streaks;
-    if (st) {
+    const { dots, trails } = this;
+    if (dots && trails) {
       for (let k = 0; k < L.n; k++) {
         src.read(L.s[k], pxScale, sd);
         target.read(L.t[k], pxScale, td);
@@ -218,10 +222,15 @@ export class Morph {
         at(tail, easeInOut(u - trail));
         for (let c = 0; c < 3; c++) col[c] = lerp(sd.c[c], td.c[c], e);
         const alpha = lerp(sd.c[3] * L.sKeep[k], td.c[3] * L.tKeep[k], e);
-        const inOrb = head[0] * head[0] + (head[1] - R) ** 2 + head[2] * head[2] < R * R * 1.02;
-        st.set(k, tail[0], tail[1], tail[2], head[0], head[1], head[2], lerp(sd.s, td.s, e), col, inOrb ? 0 : alpha);
+        const a = head[0] * head[0] + (head[1] - R) ** 2 + head[2] * head[2] < R * R * 1.02 ? 0 : alpha;
+        const size = lerp(sd.s, td.s, e);
+        dots.set(k, head[0], head[1], head[2], size / pxScale, col, a);
+        // the trail only shows while the dot moves, so it never thickens a resting dot
+        const run = Math.hypot(head[0] - tail[0], head[1] - tail[1], head[2] - tail[2]);
+        trails.set(k, tail[0], tail[1], tail[2], head[0], head[1], head[2], size, col, a * 0.7 * smooth(0, 0.08, run));
       }
-      st.commit();
+      dots.commit();
+      trails.commit();
     }
     // the target's own dots: the carried ones are drawn above, the rest fade in
     const reveal = easeInOut(this.p);
@@ -231,9 +240,9 @@ export class Morph {
 
   dispose() {
     this.group.removeFromParent();
-    if (this.streaks) {
-      this.streaks.geometry.dispose();
-      this.streaks.material.dispose();
+    for (const o of [this.dots, this.trails]) {
+      o?.geometry.dispose();
+      o?.material.dispose();
     }
   }
 }
