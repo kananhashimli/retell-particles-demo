@@ -17,8 +17,8 @@
     "fadeInner": 3,
     "fadeOuter": 7.5
   },
-  "floorGlow": 0.3,
-  "contactShadow": 0.26,
+  "floorGlow": 0,
+  "contactShadow": 0.8,
   "contactColor": "#071871",
   "camera": {
     "azimuth": 45,
@@ -46,7 +46,7 @@
     "orb": 6,
     "key": 1.4,
     "ambient": 1.6,
-    "shadows": 0.05
+    "shadows": 0
   },
   "cards": {
     "show": false,
