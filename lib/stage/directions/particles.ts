@@ -25,6 +25,14 @@ function palette(ctx: SceneContext) {
 /** dots per unit of ring at density 1 — the Retell LLM rings, the reference for every scene */
 const DOTS_PER_UNIT = 42;
 /**
+ * How far a ring of n dots at radius r has turned at t: `speed` units/s along the ring, like Denoising's lanes,
+ * rounded to whole dot gaps per loop so every dot ends on a neighbour's starting place and the loop stays seamless.
+ */
+function ringTurn(speed: number, r: number, n: number, t: number, D: number) {
+  const gap = TAU / n;
+  return (Math.round((speed * D) / r / gap) * gap * t) / D;
+}
+/**
  * Per-scene overrides of the shared particle look. Each setting has an "own" switch: off follows
  * "Particles · all scenes", on uses the value next to it. The stage merges them into ctx.particles.
  */
@@ -439,7 +447,7 @@ const FLOW_P = {
   inner: { value: 1.4, min: 1.05, max: 2.5, step: 0.01, label: "inner radius ×orb", rebuild: true },
   spacing: { value: 0.5, min: 0.15, max: 1.2, step: 0.01, label: "ring spacing", rebuild: true },
   start: { value: 135, min: 0, max: 360, step: 1, label: "start angle °" },
-  drift: { value: 1, min: 0, max: 4, step: 1, label: "drift turns / loop" },
+  ringSpeed: { value: 0.35, min: 0, max: 2, step: 0.01, label: "ring speed" },
   opacity: { value: 0.32, min: 0, max: 1, step: 0.01, label: "ring opacity" },
   litOpacity: { value: 0.95, min: 0, max: 1, step: 0.01, label: "comet opacity" },
   doneOpacity: { value: 0.7, min: 0, max: 1, step: 0.01, label: "done opacity" },
@@ -459,10 +467,10 @@ const flow: SceneDef = {
     const P0 = params<typeof FLOW_P>(ctx);
     const S = Math.round(P0.steps);
     const radii = Array.from({ length: S }, (_, i) => R * P0.inner + i * P0.spacing);
+    const counts = radii.map((r) => ringCount(ctx, r));
     const pts: { ring: number; a: number; g: Grain }[] = [];
     radii.forEach((r, ring) => {
-      const n = ringCount(ctx, r);
-      for (let j = 0; j < n; j++) pts.push({ ring, a: (j / n) * TAU, g: grain(pts.length) });
+      for (let j = 0; j < counts[ring]; j++) pts.push({ ring, a: (j / counts[ring]) * TAU, g: grain(pts.length) });
     });
     const field = kit.particles(pts.length);
     group.add(field);
@@ -486,11 +494,12 @@ const flow: SceneDef = {
           const flash = t > s0 + span * 0.65 ? Math.exp(-(t - s0 - span * 0.65) / 0.25) : 0;
           return { run, flash, active: t >= s0 && t < s0 + span * 0.65 };
         });
+        const turn = radii.map((r, ring) => (ring % 2 ? -1 : 1) * ringTurn(P.ringSpeed, r, counts[ring], t, D));
         for (let i = 0; i < pts.length; i++) {
           const { ring, g } = pts[i];
           const s = state[ring];
-          // drift round the ring (alternating direction); whole turns keep the loop seamless
-          const a = pts[i].a + ((ring % 2 ? -1 : 1) * TAU * Math.round(P.drift) * t) / D;
+          // drift round the ring, alternating direction
+          const a = pts[i].a + turn[ring];
           wiggle(L, g, t, D, off);
           const r = radii[ring] + off[0];
           const along = ((((a - a0) % TAU) + TAU) % TAU) / TAU; // 0..1 from the start angle
@@ -625,6 +634,7 @@ const VOICES_P = {
   height: { value: 0.24, min: 0, max: 0.8, step: 0.005, label: "wave height" },
   cycles: { value: 1, min: 0.25, max: 3, step: 0.05, label: "wave density" },
   drift: { value: 1, min: -4, max: 4, step: 1, label: "drift / loop" },
+  ringSpeed: { value: 0.35, min: 0, max: 2, step: 0.01, label: "ring speed" },
   fade: { value: 0.35, min: 0.05, max: 0.9, step: 0.01, label: "unmute s" },
   opacity: { value: 0.32, min: 0, max: 1, step: 0.01, label: "muted opacity" },
   activeOpacity: { value: 1, min: 0, max: 1, step: 0.01, label: "voice opacity" },
@@ -651,10 +661,10 @@ const voices: SceneDef = {
     const P0 = params<typeof VOICES_P>(ctx);
     const NV = VOICES.length;
     const radii = Array.from({ length: NV }, (_, i) => R * P0.inner + i * P0.spacing);
+    const counts = radii.map((r) => ringCount(ctx, r));
     const pts: { ring: number; a: number; g: Grain }[] = [];
     radii.forEach((r, ring) => {
-      const n = ringCount(ctx, r);
-      for (let j = 0; j < n; j++) pts.push({ ring, a: (j / n) * TAU, g: grain(pts.length) });
+      for (let j = 0; j < counts[ring]; j++) pts.push({ ring, a: (j / counts[ring]) * TAU, g: grain(pts.length) });
     });
     const field = kit.particles(pts.length);
     group.add(field);
@@ -672,6 +682,7 @@ const voices: SceneDef = {
         const on = radii.map((_, i) => (i === vi ? win(local, 0, step, P.fade, P.fade) : 0));
         const level = radii.map((_, i) => 0.3 + 0.7 * speech(t, i * 5));
         const spin = (TAU * t * P.drift) / D;
+        const turn = radii.map((r, ring) => (ring % 2 ? -1 : 1) * ringTurn(P.ringSpeed, r, counts[ring], t, D));
         for (let i = 0; i < pts.length; i++) {
           const { ring, a, g } = pts[i];
           wiggle(L, g, t, D, off);
@@ -680,7 +691,9 @@ const voices: SceneDef = {
           const shape = VOICE_SHAPES[ring % VOICE_SHAPES.length];
           const w = 0.5 + 0.5 * Math.sin(Math.round(shape.cycles * P.cycles) * a - spin * (ring % 2 ? -1 : 1));
           const k = o * Math.pow(w, shape.peak) * level[ring];
-          field.set(i, Math.cos(a) * r, 0.02 + off[1] + P.height * k, Math.sin(a) * r, L.size * lerp(1, L.emphasis, o * w) * g.s, mix3(C.ink, mix3(C.accent, C.high, k), o), lerp(P.opacity, P.activeOpacity, o * (0.45 + 0.55 * w)) * presence);
+          // each ring turns slowly at Denoising's lane speed, alternating direction, its wave riding along
+          const ra = a + turn[ring];
+          field.set(i, Math.cos(ra) * r, 0.02 + off[1] + P.height * k, Math.sin(ra) * r, L.size * lerp(1, L.emphasis, o * w) * g.s, mix3(C.ink, mix3(C.accent, C.high, k), o), lerp(P.opacity, P.activeOpacity, o * (0.45 + 0.55 * w)) * presence);
         }
         field.commit();
         const s = speech(t, vi * 5) * on[vi];

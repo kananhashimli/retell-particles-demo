@@ -14,7 +14,7 @@ export const DEFAULT_CONFIG: StageConfig = {
   contactShadow: 0.8,
   contactColor: "#071871",
   camera: { azimuth: 45, elevation: 12, zoom: 1, height: 1.25, panX: 0, panY: 0 },
-  orb: { radius: 1, shadow: "#F7F8FB", mid: "#40d9f7", highlight: "#3e8cf7", grain: 0.4, speed: 1, contrast: 1, brightness: 0, crop: 1.06, shade: "#0D39BD", shadeAmount: 1, reflection: 0.5 },
+  orb: { radius: 1, shadow: "#F7F8FB", mid: "#40d9f7", highlight: "#3e8cf7", grain: 0.4, speed: 1, contrast: 1, brightness: 0, crop: 1.06, shade: "#0D39BD", shadeAmount: 1, reflection: 0.6 },
   light: { orb: 6, key: 1.4, ambient: 1.6, shadows: 0.05 },
   cards: { show: false, style: "outline", scale: 1 },
   particles: { size: 1.5, emphasis: 1.6, density: 1, scatter: 0.025, idle: 0.012, idleSpeed: 3, muted: "#1A1C22", active: "#3E6AEF", highlight: "#3E8CF7" },

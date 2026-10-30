@@ -40,7 +40,7 @@
     "crop": 1.06,
     "shade": "#0D39BD",
     "shadeAmount": 1,
-    "reflection": 0.5
+    "reflection": 0.6
   },
   "light": {
     "orb": 6,

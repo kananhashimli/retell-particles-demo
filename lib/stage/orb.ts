@@ -142,9 +142,12 @@ vec3 orbColor(vec2 v, float noise, bool shaded) {
   vec3 col = palette(lum);
   if (!shaded) return col;
 
-  // lower half multiplied down, as in the design: clear to 33% below centre, 22% at 63%, full at the base
-  float sy = -v.y;
-  float sa = sy < 0.629 ? 0.22 * clamp((sy - 0.325) / 0.304, 0.0, 1.0) : mix(0.22, 1.0, clamp((sy - 0.629) / 0.327, 0.0, 1.0));
+  // lower half multiplied down, shaded on the sphere (a light above and a little in front) so the bands curve
+  // round it rather than cutting straight across. Down the middle it follows the design's stops:
+  // clear to 33% below centre, 22% at 63%, full at the base.
+  vec3 n = vec3(v, sqrt(max(0.0, 1.0 - dot(v, v))));
+  float lit = dot(n, vec3(0.0, 0.857, 0.514));
+  float sa = pow(clamp((0.208 - lit) / 0.876, 0.0, 1.0), 1.65);
   return col * mix(vec3(1.0), uShade, clamp(sa * uShadeAmt, 0.0, 1.0));
 }
 `;
@@ -198,12 +201,14 @@ const vec2 TAPS[12] = vec2[12](
   vec2(0.507, 0.064), vec2(0.896, 0.412), vec2(-0.322, -0.933), vec2(-0.792, -0.598));
 
 void main() {
-  // full right under the contact point, gone 0.44 radii further down
-  float fade = clamp((vP.y - 0.562) / 0.414, 0.0, 1.0);
-  if (fade <= 0.0) discard;
-  // progressive blur: sharp at the contact, ~0.15 radii soft where it fades out
-  float far = 1.0 - fade;
-  float blur = mix(0.012, 0.15, far * far * (3.0 - 2.0 * far));
+  // distance from the contact point, measured in an ellipse lying on the floor (wide, shallow), so the fade
+  // rings out round the base instead of running in straight bands; 1 = 0.48 radii straight down
+  float far = length(vec2(vP.x * 0.36, max(0.0, 0.976 - vP.y))) / 0.476;
+  float fade = exp(-2.8 * far * far);
+  if (fade < 0.004) discard;
+  // progressive blur: sharp at the contact, ~0.15 radii soft by the old fade line, a little more in the tail
+  float bf = min(far, 1.3);
+  float blur = mix(0.012, 0.15, bf * bf * (3.0 - 2.0 * min(bf, 1.0)));
   vec2 m = vec2(vP.x, -vP.y);
   vec3 acc = orbColor(m, 0.0, false);
   for (int i = 0; i < 12; i++) {
