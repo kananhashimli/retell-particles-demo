@@ -199,6 +199,7 @@ const TURNS_P = {
   wordGap: { value: 0.2, min: 0, max: 1, step: 0.01, label: "word gap s" },
   pauses: { value: 0.15, min: 0, max: 0.8, step: 0.01, label: "pause chance" },
   lineWidth: { value: 1.4, min: 0.5, max: 4, step: 0.05, label: "caller line width" },
+  lineColor: { value: "#1A1C22", label: "caller colour" },
   lineOpacity: { value: 0.85, min: 0, max: 1, step: 0.01, label: "caller opacity" },
   dotOpacity: { value: 1, min: 0, max: 1, step: 0.01, label: "agent opacity" },
   guide: { value: true, label: "guide ring" },
@@ -314,6 +315,7 @@ const turns: SceneDef = {
           }
           l.setPoints(pos.subarray(s * 3, stop * 3));
           l.material.linewidth = P.lineWidth;
+          l.material.color.set(P.lineColor);
           l.opacity = P.lineOpacity * presence * fadeAll;
         });
         for (let k = callerRuns.length; k < MAXRUNS; k++) runs[k].opacity = 0;

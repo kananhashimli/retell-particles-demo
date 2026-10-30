@@ -149,8 +149,8 @@
       "agentOpacity": 0.95,
       "fadeIn": 0.12,
       "fadeOut": 0.3,
-      "lineWidth": 1,
-      "lineOpacity": 0.15,
+      "lineWidth": 1.5,
+      "lineOpacity": 1,
       "dotStep": 1,
       "dotSize": 1.85,
       "dotOpacity": 1,
@@ -181,7 +181,8 @@
       "markerLength": 0.05,
       "markerWidth": 1.35,
       "markerColor": "#1A1C22",
-      "markerOpacity": 0.25
+      "markerOpacity": 0.25,
+      "lineColor": "#b2b5c0"
     },
     "llm": {
       "rings": 4,
