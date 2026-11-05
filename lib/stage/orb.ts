@@ -6,7 +6,8 @@
 //   • it is mirrored in the floor beneath it;
 //   • voice input comes from the scene timeline (deterministic) instead of a microphone.
 //
-// The orb is see-through, so it writes no depth and draws last: whatever is behind it shows through.
+// The orb's ink is see-through and writes no depth; it sits on an opaque disc that does, drawn before the
+// scene's objects, so they pass in front of the orb and disappear behind it.
 // Voice states never change its size or outline; the energy moves inside it.
 
 import * as THREE from "three";
@@ -182,6 +183,20 @@ void main() {
   outColor = ink(blurred(vP, 0.035, uSmear, 12)) * mask;
 }`;
 
+// Solid #F6F6F8 disc behind the sphere (the ink alone is see-through). It writes depth, so scene objects
+// drawn after it are hidden where they pass behind the orb and cross over it where they pass in front.
+const backdropFrag = /* glsl */ `
+precision highp float;
+in vec2 vP;
+layout(location = 0) out highp vec4 outColor;
+
+void main() {
+  float d = length(vP), aa = fwidth(d);
+  float a = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, d);
+  if (a < 0.5) discard; // depth only inside the sphere
+  outColor = vec4(0.9647, 0.9647, 0.9725, 1.0); // #F6F6F8
+}`;
+
 // The orb mirrored in the floor: one diameter lower, blurring more and fading out the further it gets from the
 // base. It is made of the same light, so it stays as airy as the orb and only exists where the orb has density.
 const reflVert = /* glsl */ `
@@ -217,6 +232,8 @@ const EASED = ["streaks", "fine", "smear", "rim", "back", "pole", "halo", "expos
 export class Orb {
   readonly group = new THREE.Group();
   readonly mesh: THREE.Mesh;
+  /** opaque disc behind the orb that also occludes what passes behind it */
+  readonly backdrop: THREE.Mesh;
   /** mirror image on the floor, drawn under the grid and contact shadow */
   readonly reflection: THREE.Mesh;
   params: OrbParams;
@@ -273,9 +290,18 @@ export class Orb {
       });
     this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material(vert, frag));
     this.mesh.frustumCulled = false;
-    // after the scene's objects (kit.ts), so they show through
-    this.mesh.renderOrder = 4;
+    // the backdrop, then the orb, then the scene's objects (renderOrder 3, kit.ts), which depth-test against
+    // the backdrop: in front of the orb they draw over it, behind it they are hidden
+    this.mesh.renderOrder = 2.5;
     this.mesh.name = "orb";
+
+    this.backdrop = new THREE.Mesh(
+      new THREE.PlaneGeometry(2, 2),
+      new THREE.ShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: vert, fragmentShader: backdropFrag, uniforms: this.uniforms }),
+    );
+    this.backdrop.frustumCulled = false;
+    this.backdrop.renderOrder = 2;
+    this.backdrop.name = "orb-backdrop";
 
     this.reflection = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material(reflVert, reflFrag));
     (this.reflection.material as THREE.Material).depthTest = false;
@@ -283,7 +309,7 @@ export class Orb {
     this.reflection.renderOrder = -3;
     this.reflection.name = "orb-reflection";
 
-    this.group.add(this.mesh, this.reflection);
+    this.group.add(this.backdrop, this.mesh, this.reflection);
     this.setParams(params);
     this.writeLook(0);
   }
@@ -376,6 +402,8 @@ export class Orb {
   dispose() {
     this.mesh.geometry.dispose();
     (this.mesh.material as THREE.Material).dispose();
+    this.backdrop.geometry.dispose();
+    (this.backdrop.material as THREE.Material).dispose();
     this.reflection.geometry.dispose();
     (this.reflection.material as THREE.Material).dispose();
   }

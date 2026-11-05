@@ -578,7 +578,7 @@ export class Stage {
     const saved: [THREE.Material, boolean][] = [];
     const inLayer = (o: THREE.Object3D): boolean => {
       if (o === this.floor.mesh || o === this.orb.reflection) return layer === "floor";
-      if (o === this.orb.mesh) return layer === "orb";
+      if (o === this.orb.mesh || o === this.orb.backdrop) return layer === "orb";
       return layer === "objects";
     };
     this.scene.traverse((o) => {
