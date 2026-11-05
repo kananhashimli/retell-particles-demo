@@ -113,9 +113,9 @@ export function turnToken(t: number) {
 }
 
 export const VOICES = [
-  { name: "Nova", trait: "Warm, natural", mid: "#40d9f7", high: "#3e8cf7" },
+  { name: "Nova", trait: "Warm, natural", mid: "#00ccff", high: "#3d64ff" },
   { name: "Aria", trait: "Bright, upbeat", mid: "#8fb4ff", high: "#5b6cff" },
-  { name: "Milo", trait: "Calm, low", mid: "#5fe0d2", high: "#2f9fd8" },
+  { name: "Ember", trait: "Warm, bold", mid: "#f7962f", high: "#ff6000" },
   { name: "Iris", trait: "Clear, friendly", mid: "#a99bff", high: "#6d5cff" },
   { name: "Jun", trait: "Soft, steady", mid: "#7fd3ff", high: "#3d64ff" },
 ];

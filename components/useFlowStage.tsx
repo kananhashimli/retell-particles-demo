@@ -5,6 +5,7 @@ import { Stage } from "@/lib/stage/stage";
 import { defaultsFor } from "@/lib/stage/defaults";
 import { SCENE_ORDER, type SceneId } from "@/lib/stage/types";
 import { SceneCards } from "./lab/SceneCards";
+import { getOrbStyle, StylePicker, useOrbStyle } from "./StylePicker";
 
 const CONFIG = defaultsFor("particles");
 
@@ -38,11 +39,13 @@ export function useFlowStage({ autoplay }: { autoplay: boolean }) {
   const [ready, setReady] = useState(false);
   const [scene, setScene] = useState<SceneId>(CONFIG.scene);
   const mobile = useMobile();
+  const style = useOrbStyle();
 
   useEffect(() => {
     let st: Stage | null = null;
     try {
       st = new Stage(box.current!, { ...CONFIG, camera: cameraFor(matchMedia(MOBILE).matches) });
+      st.orb.setStyle(getOrbStyle(), true);
     } catch (e) {
       // no WebGL: the tabs and cards still work over the plain background
       console.error(e);
@@ -67,6 +70,7 @@ export function useFlowStage({ autoplay }: { autoplay: boolean }) {
 
   useEffect(() => stage?.applyConfig({ autoplay }), [stage, autoplay]);
   useEffect(() => stage?.applyConfig({ camera: cameraFor(mobile) }), [stage, mobile]);
+  useEffect(() => stage?.orb.setStyle(style), [stage, style]);
 
   const pickScene = useCallback(
     (id: SceneId) => {
@@ -95,6 +99,7 @@ export function StageCard({ box, scene, stage, mobile, ready, style }: StageCard
     <div className="relative aspect-square overflow-hidden rounded-[32px] md:aspect-[876/678]" style={{ background: CONFIG.background, ...style }}>
       <div ref={box} className="absolute inset-0" />
       <SceneCards scene={scene} stage={stage} mobile={mobile} show={ready} />
+      <StylePicker className="absolute right-4 top-4" />
     </div>
   );
 }

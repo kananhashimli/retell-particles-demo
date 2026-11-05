@@ -1,9 +1,8 @@
 // Vector export of the current frame: the grid, every stroke and particle a scene draws, floor
 // highlights, as plain SVG shapes that stay editable in Figma.
 //
-// The orb and the background are left out (the SVG is transparent), but everything the orb hides is
-// cut away, so placing the orb image *under* this SVG reproduces the render: strokes passing in
-// front of the orb sit on top of it.
+// The orb and the background are left out (the SVG is transparent). The orb is see-through and hides
+// nothing, so placing the orb image *over* this SVG reproduces the render.
 
 import * as THREE from "three";
 import type { InterleavedBufferAttribute } from "three";
@@ -54,23 +53,12 @@ const pathD = (pts: Pt[]) => simplify(pts).map((p, i) => `${i ? "L" : "M"}${f(p[
 
 export function buildSceneSVG(o: SceneSVGInput) {
   const { camera, w, h, config } = o;
-  const R = config.orb.radius;
   camera.updateMatrixWorld();
-  const toViewer = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 2).normalize();
-  const centre = new THREE.Vector3(0, R, 0);
   const tmp = new THREE.Vector3();
 
   const project = (p: THREE.Vector3): Pt => {
     tmp.copy(p).project(camera);
     return [(tmp.x * 0.5 + 0.5) * w, (-tmp.y * 0.5 + 0.5) * h];
-  };
-  /** true when the orb sits between p and the viewer */
-  const hidden = (p: THREE.Vector3) => {
-    const vx = centre.x - p.x, vy = centre.y - p.y, vz = centre.z - p.z;
-    const t = vx * toViewer.x + vy * toViewer.y + vz * toViewer.z;
-    const d2 = vx * vx + vy * vy + vz * vz - t * t;
-    if (d2 >= R * R) return false;
-    return t + Math.sqrt(R * R - d2) > 0.004;
   };
 
   const defs: string[] = [];
@@ -90,18 +78,12 @@ export function buildSceneSVG(o: SceneSVGInput) {
           if (Math.abs(c) >= g.fadeOuter) continue;
           const half = Math.sqrt(g.fadeOuter ** 2 - c * c);
           const n = Math.max(2, Math.ceil((2 * half) / 0.05));
-          // split the line where the orb hides it
-          const runs: THREE.Vector3[][] = [];
-          let cur: THREE.Vector3[] | null = null;
+          const run: THREE.Vector3[] = [];
           for (let i = 0; i <= n; i++) {
             const s = -half + (2 * half * i) / n;
-            const p = axis === "x" ? new THREE.Vector3(c, 0, s) : new THREE.Vector3(s, 0, c);
-            if (hidden(p)) {
-              if (cur && cur.length > 1) runs.push(cur);
-              cur = null;
-            } else (cur ??= []).push(p);
+            run.push(axis === "x" ? new THREE.Vector3(c, 0, s) : new THREE.Vector3(s, 0, c));
           }
-          if (cur && cur.length > 1) runs.push(cur);
+          const runs = [run];
           const major = isMajor(k);
           for (const run of runs) {
             const a = run[0], b = run[run.length - 1];
@@ -124,7 +106,7 @@ export function buildSceneSVG(o: SceneSVGInput) {
           const p = new THREE.Vector3(i * g.cell, 0, j * g.cell);
           const d = Math.hypot(p.x, p.z);
           const a = fade(d) * g.opacity;
-          if (d >= g.fadeOuter || a < 0.004 || hidden(p)) continue;
+          if (d >= g.fadeOuter || a < 0.004) continue;
           const [x, y] = project(p);
           if (x < -10 || y < -10 || x > w + 10 || y > h + 10) continue;
           if (g.style === "dots") grid.push(`<circle cx="${f(x)}" cy="${f(y)}" r="${f(g.width * 0.9 + 0.5)}" fill="${g.color}" fill-opacity="${f(a)}"/>`);
@@ -157,16 +139,12 @@ export function buildSceneSVG(o: SceneSVGInput) {
     if ((rp.kind ?? 0) !== 1) continue; // only drawn rings are strokes; glows are left out
     const n = Math.max(48, Math.ceil((rp.radius * Math.PI * 2) / STEP));
     const runs: Pt[][] = [];
-    let cur: Pt[] | null = null;
+    const ring: Pt[] = [];
     for (let i = 0; i <= n; i++) {
       const a = (i / n) * Math.PI * 2;
-      const p = new THREE.Vector3((rp.x ?? 0) + Math.cos(a) * rp.radius, 0, (rp.z ?? 0) + Math.sin(a) * rp.radius);
-      if (hidden(p)) {
-        if (cur && cur.length > 1) runs.push(cur);
-        cur = null;
-      } else (cur ??= []).push(project(p));
+      ring.push(project(new THREE.Vector3((rp.x ?? 0) + Math.cos(a) * rp.radius, 0, (rp.z ?? 0) + Math.sin(a) * rp.radius)));
     }
-    if (cur && cur.length > 1) runs.push(cur);
+    runs.push(ring);
     for (const run of runs) floor.push(`<path d="${pathD(run)}" fill="none" stroke="${config.accent}" stroke-opacity="${f(Math.min(1, rp.strength) * 0.8)}" stroke-width="${f(Math.max(1, rp.width))}"/>`);
   }
 
@@ -211,7 +189,7 @@ export function buildSceneSVG(o: SceneSVGInput) {
             mid.lerpVectors(p0, p1, 0.5);
             const dm = dist + (len * (s + 0.5)) / steps;
             const inDash = !m.dashed || (((dm + m.dashOffset) % period) + period) % period <= m.dashSize;
-            if (!inDash || hidden(mid)) {
+            if (!inDash) {
               if (cur) runs.push(cur);
               cur = null;
               continue;
@@ -246,7 +224,6 @@ export function buildSceneSVG(o: SceneSVGInput) {
           if (alpha < 0.01) continue;
           a.fromBufferAttribute(st, i).applyMatrix4(mesh.matrixWorld);
           b.fromBufferAttribute(en, i).applyMatrix4(mesh.matrixWorld);
-          if (hidden(b)) continue;
           const [x1, y1] = project(a), [x2, y2] = project(b);
           if (Math.max(x1, x2) < -10 || Math.max(y1, y2) < -10 || Math.min(x1, x2) > w + 10 || Math.min(y1, y2) > h + 10) continue;
           const c = hex(new THREE.Color().setRGB(col.getX(i), col.getY(i), col.getZ(i), THREE.SRGBColorSpace));
@@ -275,7 +252,6 @@ export function buildSceneSVG(o: SceneSVGInput) {
           const alpha = col.getW(i) * op;
           if (alpha < 0.01) continue;
           a.fromBufferAttribute(pos, i).applyMatrix4(pts.matrixWorld);
-          if (hidden(a)) continue;
           const [x, y] = project(a);
           if (x < -10 || y < -10 || x > w + 10 || y > h + 10) continue;
           const diameter = (size.getX(i) * scale) / o.dpr;
@@ -286,6 +262,8 @@ export function buildSceneSVG(o: SceneSVGInput) {
     });
 
   // ---------------------------------------------------------------- assemble
+  const R = config.orb.radius;
+  const centre = new THREE.Vector3(0, R, 0);
   const [ox, oy] = project(centre);
   const [ex] = project(centre.clone().addScaledVector(new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize(), R));
   const W = Math.round(w), H = Math.round(h);

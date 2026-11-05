@@ -6,12 +6,15 @@ import { DIRECTIONS, DIRECTION_ORDER } from "@/lib/stage/directions";
 import { mergeConfig } from "@/lib/stage/config";
 import { defaultsFor } from "@/lib/stage/defaults";
 import { SCENE_ORDER, SCENES, type DirectionId, type SceneId, type StageConfig } from "@/lib/stage/types";
+import { getOrbStyle, StylePicker, useOrbStyle } from "../StylePicker";
 import { FlowTabs } from "./FlowTabs";
 import { Panel } from "./Panel";
 import { SceneCards } from "./SceneCards";
 import { DownloadIcon, PauseIcon, PlayIcon, SlidersIcon } from "./icons";
 
-const KEY = "retell-stage:v3";
+const KEY = "retell-stage:v6";
+/** from before the orb's latest restyle; their other settings carry over */
+const OLD_KEYS = ["retell-stage:v5", "retell-stage:v4", "retell-stage:v3"];
 interface Saved {
   direction: DirectionId;
   configs: Partial<Record<DirectionId, StageConfig>>;
@@ -19,7 +22,17 @@ interface Saved {
 const load = (): Saved | null => {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as Saved) : null;
+    if (raw) return JSON.parse(raw) as Saved;
+    const old = OLD_KEYS.map((k) => localStorage.getItem(k)).find(Boolean);
+    if (!old) return null;
+    // the orb and the floor under it were restyled together: take the new defaults for those
+    const s = JSON.parse(old) as Saved;
+    for (const [id, c] of Object.entries(s.configs) as [DirectionId, StageConfig][]) {
+      const d = defaultsFor(id);
+      // the Retell voices scene changed with the extra voices
+      s.configs[id] = { ...c, orb: d.orb, floorGlow: d.floorGlow, contactShadow: d.contactShadow, contactColor: d.contactColor, sceneParams: { ...c.sceneParams, voices: d.sceneParams.voices } };
+    }
+    return s;
   } catch {
     return null;
   }
@@ -53,6 +66,7 @@ export function Lab() {
     const dir: DirectionId = saved.current.direction in DIRECTIONS ? saved.current.direction : "particles";
     const cfg = saved.current.configs[dir] ?? defaultsFor(dir);
     const st = new Stage(box.current!, { ...cfg, direction: dir });
+    st.orb.setStyle(getOrbStyle(), true);
     setStage(st);
     setDirection(dir);
     setScene(st.config.scene);
@@ -136,6 +150,9 @@ export function Lab() {
     return () => window.removeEventListener("keydown", onKey);
   }, [togglePlay, pickScene, pickDirection]);
 
+  const orbStyle = useOrbStyle();
+  useEffect(() => stage?.orb.setStyle(orbStyle), [stage, orbStyle]);
+
   const progress = useCallback(() => stage?.progress ?? 0, [stage]);
 
   // ---------------------------------------------------------------- exports
@@ -203,7 +220,7 @@ export function Lab() {
           break;
         case "copy-scene-svg":
           await navigator.clipboard.writeText(stage.sceneSVG());
-          flash("Scene SVG copied. Paste it into Figma, orb image underneath.");
+          flash("Scene SVG copied. Paste it into Figma, orb image on top.");
           break;
         case "copy-png":
           await navigator.clipboard.write([new ClipboardItem({ "image/png": stage.snapshot({ scale: 2 }) })]);
@@ -277,7 +294,7 @@ export function Lab() {
       <header className="sticky top-0 z-30 border-b border-line bg-white/85 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-[1512px] items-center gap-4 px-6">
           <div className="flex items-center gap-2.5 text-[13px]">
-            <span className="size-2.5 rounded-full bg-[radial-gradient(circle_at_40%_30%,#fff_0_12%,#40d9f7_45%,#3e6aef_80%)]" />
+            <span className="size-2.5 rounded-full bg-[radial-gradient(circle_at_40%_30%,#fff_0_12%,#00ccff_45%,#3d64ff_80%)]" />
             <span className="font-medium">Flow stage</span>
             <span className="text-muted">Listen · Think · Speak</span>
           </div>
@@ -301,6 +318,7 @@ export function Lab() {
             })}
           </nav>
           <div className="flex items-center gap-2">
+            <StylePicker />
             <button type="button" onClick={togglePlay} className="grid size-9 place-items-center rounded-full border border-line hover:border-ink/30" aria-label={playing ? "Pause" : "Play"} title="Play / pause (Space)">
               {playing ? <PauseIcon /> : <PlayIcon />}
             </button>

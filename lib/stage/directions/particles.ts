@@ -371,7 +371,6 @@ const turns: SceneDef = {
         ctx.orb.state = ag > 0 || agentTurn ? "speaking" : "listening";
         ctx.orb.listen = caller;
         ctx.orb.speak = ag;
-        ctx.orb.bands = [ag, ag * 0.8, ag * 0.5];
       },
     };
   },
@@ -623,7 +622,6 @@ const colloquial: SceneDef = {
         const m = spoken(t);
         const s = lerp(0.5, speech(t, 5), m);
         ctx.orb.speak = s;
-        ctx.orb.bands = [s, s * 0.8, s * 0.5];
       },
     };
   },
@@ -712,8 +710,7 @@ const voices: SceneDef = {
         field.commit();
         const s = vi < 0 ? 0 : speech(t, vi * 5) * on[vi];
         ctx.orb.speak = s;
-        ctx.orb.bands = [s, s * 0.8, s * 0.6];
-        ctx.orb.tint = P.tint && vi >= 0 ? { mid: VOICES[vi].mid, high: VOICES[vi].high } : null;
+        ctx.orb.tint = P.tint && vi >= 0 ? VOICES[vi] : null;
       },
     };
   },

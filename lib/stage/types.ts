@@ -1,6 +1,6 @@
 import type * as THREE from "three";
 import type { GridStyle, Ripple, Tile } from "./floor";
-import type { OrbState } from "./orb";
+import type { OrbParams, OrbState } from "./orb";
 import type { Kit } from "./kit";
 
 export type DirectionId = "line" | "particles";
@@ -47,23 +47,7 @@ export interface StageConfig {
   contactShadow: number;
   contactColor: string;
   camera: { azimuth: number; elevation: number; zoom: number; height: number; panX: number; panY: number };
-  orb: {
-    radius: number;
-    shadow: string;
-    mid: string;
-    highlight: string;
-    grain: number;
-    speed: number;
-    contrast: number;
-    brightness: number;
-    /** how far the orb is scaled inside its circular mask (1 = full, rim light visible) */
-    crop: number;
-    /** colour multiplied over the lower half, and how strongly */
-    shade: string;
-    shadeAmount: number;
-    /** the orb mirrored in the floor beneath it, in its own colours */
-    reflection: number;
-  };
+  orb: OrbParams;
   /** shared look of every particle, dot and streak (Particles direction) */
   particles: ParticleLook;
   /** shared look of every stroke (Line direction) */
@@ -141,7 +125,6 @@ export interface OrbScope {
   state: OrbState;
   listen: number;
   speak: number;
-  bands: [number, number, number];
   /** temporary orb colours (e.g. a voice's tint); null = the configured palette */
   tint?: { mid: string; high: string } | null;
 }

@@ -59,17 +59,25 @@ export function Panel({ stage, scene, version, onChange, onResetLook }: Props) {
 
     const orb = pane.addFolder({ title: "Orb" });
     orb.addBinding(params.orb, "radius", { min: 0.6, max: 1.4, step: 0.01 });
-    orb.addBinding(params.orb, "mid");
-    orb.addBinding(params.orb, "highlight");
-    orb.addBinding(params.orb, "shadow");
-    orb.addBinding(params.orb, "grain", { min: 0, max: 1.5, step: 0.01 });
+    orb.addBinding(params.orb, "mid", { label: "light colour" });
+    orb.addBinding(params.orb, "highlight", { label: "dense colour" });
     orb.addBinding(params.orb, "speed", { min: 0, max: 2, step: 0.01 });
-    orb.addBinding(params.orb, "contrast", { min: 0.5, max: 1.6, step: 0.01 });
-    orb.addBinding(params.orb, "brightness", { min: -0.3, max: 0.3, step: 0.01 });
-    orb.addBinding(params.orb, "crop", { min: 1, max: 1.2, step: 0.005, label: "rim crop" });
-    orb.addBinding(params.orb, "shade", { label: "lower shade" });
-    orb.addBinding(params.orb, "shadeAmount", { min: 0, max: 1.5, step: 0.01, label: "shade amount" });
     orb.addBinding(params.orb, "reflection", { min: 0, max: 1, step: 0.01, label: "reflection amount" });
+    for (const style of [1, 2] as const) {
+      const look = orb.addFolder({ title: `Style ${style}`, expanded: false });
+      const l = params.orb.looks[style];
+      look.addBinding(l, "streaks", { min: 0.5, max: 8, step: 0.01, label: "filament scale" });
+      look.addBinding(l, "fine", { min: 0, max: 2, step: 0.01, label: "fine detail" });
+      look.addBinding(l, "smear", { min: 0, max: 1, step: 0.01 });
+      look.addBinding(l, "rim", { min: 0, max: 1, step: 0.01 });
+      look.addBinding(l, "back", { min: 0, max: 1, step: 0.01, label: "far side" });
+      look.addBinding(l, "pole", { min: 0, max: 4, step: 0.01, label: "pole flares" });
+      look.addBinding(l, "halo", { min: 0, max: 2, step: 0.01 });
+      look.addBinding(l, "exposure", { min: 0.2, max: 2, step: 0.01 });
+      look.addBinding(l, "grain", { min: 0, max: 1, step: 0.01 });
+      look.addBinding(l, "loop", { min: 1, max: 40, step: 0.01, label: "loop s" });
+      look.addBinding(l, "seed", { min: 0, max: 100, step: 0.1, label: "pattern" });
+    }
 
     const grid = pane.addFolder({ title: "Grid" });
     grid.addBinding(params.grid, "style", { options: { lines: "lines", dots: "dots", crosses: "cross" } });

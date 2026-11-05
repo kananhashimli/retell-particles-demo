@@ -39,7 +39,8 @@ development; in a production build the button reports that it's disabled.
 - `lib/stage/` – the stage engine (three.js). See `lib/stage/README.md` for how scenes are written.
 - `lib/stage/directions/particles.ts` – the six particle scenes.
 - `lib/stage/morph.ts` – the particle morph between scenes.
-- `public/orb/delay.bin.gz` – the orb's motion field, loaded at runtime.
+- `lib/stage/orb.ts` – the orb shader and its two styles. `components/StylePicker.tsx` is the Style 1 / Style 2
+  picker on every page; the choice is remembered in the browser.
 
 ## Notes
 

@@ -72,7 +72,7 @@ export class Stage {
   private morphFrom: Active | null = null;
   private onFrame?: () => void;
   private lookKey = "";
-  /** resolves once the orb's data has loaded and the scene's shaders are compiled; the stage then fades in */
+  /** resolves once the scene's shaders are compiled; the stage then fades in */
   readonly ready: Promise<void>;
   private loaded = false;
   private shown = false;
@@ -101,7 +101,7 @@ export class Stage {
     this.setScene(this.config.scene, { instant: true });
     // never wait forever: a slow network or a stuck compile still fades in after a few seconds
     const timeout = new Promise<void>((done) => setTimeout(done, 5000));
-    const loaded = Promise.all([this.orb.ready, this.renderer.compileAsync(this.scene, this.camera)]).then(() => {}, () => {});
+    const loaded = this.renderer.compileAsync(this.scene, this.camera).then(() => {}, () => {});
     this.ready = Promise.race([loaded, timeout]).then(() => {
       this.loaded = true;
     });
@@ -143,7 +143,7 @@ export class Stage {
     this.floor.setLook(
       {
         ...c.grid,
-        glowColor: c.orb.highlight,
+        glowColor: c.orb.mid,
         glow: c.floorGlow,
         shadow: c.contactShadow,
         shadowColor: c.contactColor,
@@ -206,7 +206,7 @@ export class Stage {
     group.name = `scene:${this.direction.id}:${id}`;
     this.scene.add(group);
     const scope = { presence: o.instant ? 1 : 0 };
-    const orb: OrbScope = { state: def.orb, listen: 0, speak: 0, bands: [0, 0, 0] };
+    const orb: OrbScope = { state: def.orb, listen: 0, speak: 0 };
     const floorRef = this.floor;
     // eslint-disable-next-line @typescript-eslint/no-this-alias -- read live settings from a getter
     const stage = this;
@@ -337,7 +337,6 @@ export class Stage {
     this.floor.beginFrame();
     let best: Active | undefined;
     let listen = 0, speak = 0;
-    const bands: [number, number, number] = [0, 0, 0];
     const tick = (a: Active, dt: number) => {
       const d = a.def.duration;
       const before = a.age % d;
@@ -361,7 +360,6 @@ export class Stage {
       if (!best || p > best.scope.presence) best = a;
       listen += a.orb.listen * p;
       speak += a.orb.speak * p;
-      for (let i = 0; i < 3; i++) bands[i] += a.orb.bands[i] * p;
     };
     for (const a of [...this.active]) if (this.active.includes(a)) tick(a, dt);
     // a scene switched to during this frame (autoplay) draws now too, so no frame goes empty
@@ -375,15 +373,15 @@ export class Stage {
     const tint = best?.orb.tint;
     this.orb.params.mid = tint ? tint.mid : this.config.orb.mid;
     this.orb.params.highlight = tint ? tint.high : this.config.orb.highlight;
-    // the shade, contact shadow and accents turn with the orb's hue as it eases into a tint
+    // the floor's glow, contact shadow and accents turn with the orb's hue as it eases into a tint
     const now = this.orb.highlightNow;
     const base = srgb(this.config.orb.highlight);
     const dh = hueOf(now.x, now.y, now.z) - hueOf(base.x, base.y, base.z);
     this.orb.hueShift = dh - Math.round(dh);
     this.floor.shadowColor = shiftHue(this.config.contactColor, this.orb.hueShift);
+    this.floor.glowColor = this.orb.midNow;
     d.listen = Math.min(1, listen);
     d.speak = Math.min(1, speak);
-    d.bands = bands;
     this.orb.update(dt);
     this.floor.endFrame(this.orb.energy);
   }
@@ -438,8 +436,6 @@ export class Stage {
   }
 
   private syncPixelScale(pr: number) {
-    const pxPerUnit = (this.h * pr) / this.viewH;
-    this.orb.setPixelScale(pxPerUnit);
     // particle sizes are authored for the default framing at 1×
     this.pointScale.value = pr * (5.2 / this.viewH) * (this.h / 640);
   }

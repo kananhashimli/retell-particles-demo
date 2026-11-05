@@ -29,13 +29,10 @@
   },
   "orb": {
     "radius": 0.73,
-    "shadow": "#F7F8FB",
-    "mid": "#40d9f7",
-    "highlight": "#3e8cf7",
-    "grain": 0.4,
+    "mid": "#00ccff",
+    "highlight": "#3d64ff",
     "speed": 0.83,
-    "contrast": 1,
-    "brightness": 0
+    "reflection": 0.35
   },
   "particles": {
     "size": 2.0,

@@ -17,9 +17,9 @@
     "fadeInner": 3,
     "fadeOuter": 7.5
   },
-  "floorGlow": 0,
-  "contactShadow": 0.8,
-  "contactColor": "#071871",
+  "floorGlow": 0.07,
+  "contactShadow": 0.14,
+  "contactColor": "#3d64ff",
   "camera": {
     "azimuth": 45,
     "elevation": 12,
@@ -30,17 +30,10 @@
   },
   "orb": {
     "radius": 1,
-    "shadow": "#F7F8FB",
-    "mid": "#40d9f7",
-    "highlight": "#3e8cf7",
-    "grain": 0.4,
+    "mid": "#00ccff",
+    "highlight": "#3d64ff",
     "speed": 1,
-    "contrast": 1,
-    "brightness": 0,
-    "crop": 1.06,
-    "shade": "#0D39BD",
-    "shadeAmount": 0.8,
-    "reflection": 0.6
+    "reflection": 0.35
   },
   "particles": {
     "size": 1.6,

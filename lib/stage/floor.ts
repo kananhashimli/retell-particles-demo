@@ -147,11 +147,10 @@ void main() {
   over(acc, uAccent, clamp(tileFill, 0.0, 1.0) * 0.16);
   over(acc, uAccent, clamp(tileEdge, 0.0, 1.0) * 0.7);
   over(acc, uAccent, clamp(ring, 0.0, 1.0) * 0.8);
-  // contact shadow, as drawn in the design: a flat dark ellipse 1.5 radii wide, ~1/7 as tall on screen,
-  // grown a little for the design's 3.8px blur. A gaussian through the design's stops (28% at 55%) keeps it smooth.
+  // contact shadow: light passes through the orb, so this is only a soft tinted breath where it meets the floor
   vec2 sv = vec2(dot(xz, uViewR), dot(xz, uViewF) / uSquash);
-  float su = length(sv) / (uOrbR * 0.78);
-  float sh = exp(-su * su * 4.0);
+  float su = length(sv) / (uOrbR * 0.9);
+  float sh = exp(-su * su * 3.0);
   over(acc, uShadowColor, sh * uShadow);
 
   acc *= uGlobal;
@@ -231,12 +230,17 @@ export class Floor {
     srgb(hex, this.u.uShadowColor.value);
   }
 
+  /** the light pool's colour this frame (it follows the orb's tint) */
+  set glowColor(rgb: THREE.Vector3) {
+    (this.u.uGlowColor.value as THREE.Vector3).copy(rgb);
+  }
+
   /** camera azimuth / elevation in radians: keeps the contact shadow's on-screen shape fixed */
   setView(azimuth: number, elevation: number) {
     (this.u.uViewR.value as THREE.Vector2).set(Math.cos(azimuth), -Math.sin(azimuth));
     (this.u.uViewF.value as THREE.Vector2).set(Math.sin(azimuth), Math.cos(azimuth));
-    // the design's ellipse is 15 : 109 on screen; the floor already foreshortens by sin(elevation)
-    this.u.uSquash.value = (0.1376 * 1.25) / Math.max(0.05, Math.sin(elevation));
+    // about 1 : 5 on screen; the floor already foreshortens by sin(elevation)
+    this.u.uSquash.value = 0.2 / Math.max(0.05, Math.sin(elevation));
   }
 
   set opacity(v: number) {

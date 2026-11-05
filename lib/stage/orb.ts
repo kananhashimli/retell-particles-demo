@@ -1,44 +1,75 @@
 // Retell orb inside a 3D scene.
 //
-// Port of the Iris reference orb (iris-voice.vercel.app/orb.js): same measured waveform W, delay
-// field (delay.bin.gz) and per-state motion. Differences:
-//   • it draws on a camera-facing quad in world space instead of a full-screen pass;
-//   • it writes sphere depth (impostor), so objects pass in front of / behind it correctly;
+// Port of the Meridian voice orb (meridian-voice-swart.vercel.app): same filament shader, styles and
+// per-state motion, drawn in its Ink mode for a light page. Differences:
+//   • it draws on a camera-facing quad in world space instead of a full-screen canvas;
+//   • it is mirrored in the floor beneath it;
 //   • voice input comes from the scene timeline (deterministic) instead of a microphone.
+//
+// The orb is see-through, so it writes no depth and draws last: whatever is behind it shows through.
+// Voice states never change its size or outline; the energy moves inside it.
 
 import * as THREE from "three";
-import { shiftHue } from "./util";
 
-const W = [0.3459,0.3303,0.3147,0.2991,0.284,0.2689,0.2542,0.24,0.2261,0.2129,0.2004,0.1879,0.1753,0.1635,0.1519,0.1408,0.1303,0.1199,0.1099,0.1,0.0906,0.0813,0.0724,0.064,0.0562,0.0482,0.0407,0.0334,0.0262,0.0179,0.0106,0.0057,0.0032,0.003,0.0058,0.0168,0.0428,0.0791,0.1224,0.173,0.2313,0.2973,0.3693,0.4438,0.5161,0.5831,0.6424,0.6918,0.7299,0.7522,0.7608,0.7632,0.7636,0.7631,0.7621,0.76,0.7574,0.7538,0.7493,0.7439,0.7377,0.7308,0.7237,0.7158,0.7072,0.6981,0.6885,0.6781,0.6673,0.6564,0.6448,0.6328,0.6204,0.6076,0.5943,0.5807,0.5665,0.5522,0.5374,0.5225,0.5073,0.4916,0.476,0.4598,0.4437,0.4275,0.4111,0.3948,0.3783,0.362];
-const REF = { size: 500, radius: 229, cx: 249.5, cy: 248 };
-const FPS = 25;
-const LOOP = W.length;
-const GRAIN_STD = 0.026;
-const EXTENT = 1.04; // quad half-size in sphere radii
+const EXTENT = 1.7; // quad half-size in sphere radii: the halo and pole flares reach past the sphere
+const MASK_FROM = 1.2; // the reference's soft edge, in sphere radii: the glow is gone by MASK_TO
+const MASK_TO = 1.667;
 
 export type OrbState = "idle" | "listening" | "thinking" | "speaking";
+export type OrbStyle = 1 | 2;
+
+/** How one style of the orb looks. */
+export interface OrbLook {
+  /** size of the filaments (lower = broader, softer) */
+  streaks: number;
+  fine: number;
+  /** vertical motion blur along the meridians */
+  smear: number;
+  rim: number;
+  /** how much of the far side shows through */
+  back: number;
+  /** flares at the top and bottom */
+  pole: number;
+  halo: number;
+  exposure: number;
+  grain: number;
+  /** seconds per loop */
+  loop: number;
+  /** picks the pattern; changes at once rather than easing */
+  seed: number;
+}
+
+/** Style 1 is the reference's "For Voice" look, style 2 its "Blue" look, both with less density and glow to stay airy in the scene. */
+export const ORB_LOOKS: Record<OrbStyle, OrbLook> = {
+  1: { streaks: 3.2, fine: 0.7, smear: 0.2, rim: 0.75, back: 0.75, pole: 1.2, halo: 0.3, exposure: 0.7, grain: 0.15, loop: 5.76, seed: 3.7 },
+  2: { streaks: 1, fine: 1.14, smear: 0, rim: 0.41, back: 0.75, pole: 0, halo: 0.3, exposure: 0.65, grain: 0.4, loop: 20, seed: 81.4 },
+};
 
 export interface OrbParams {
   radius: number;
-  shadow: string;
+  /** colour of the thin, light parts */
   mid: string;
+  /** colour where the orb is densest */
   highlight: string;
-  grain: number;
   speed: number;
-  contrast: number;
-  brightness: number;
-  crop: number;
-  shade: string;
-  shadeAmount: number;
+  /** the orb mirrored in the floor beneath it */
   reflection: number;
+  looks: Record<OrbStyle, OrbLook>;
 }
 
 export interface OrbDrive {
   state: OrbState;
   listen: number; // caller voice level 0..1
   speak: number; // agent voice level 0..1
-  bands: [number, number, number];
 }
+
+/** Per-state motion, from the reference with gentler light boosts, as scenes rarely leave these states; `react` is how strongly the voice level drives the rest. */
+const STATES: Record<OrbState, { spin: number; breathe: number; exp: number; pole: number; halo: number; flow: number; wave: number; react: number }> = {
+  idle: { spin: 1, breathe: 0, exp: 0, pole: 0, halo: 0, flow: 0, wave: 0, react: 0.25 },
+  listening: { spin: 1.6, breathe: 0.04, exp: 0.1, pole: 0.2, halo: 0.2, flow: 0.22, wave: 0.22, react: 0.7 },
+  speaking: { spin: 1.3, breathe: 0, exp: 0.06, pole: 0.12, halo: 0.15, flow: 0.12, wave: 0.1, react: 1 },
+  thinking: { spin: 2.4, breathe: 0.03, exp: 0.04, pole: 0.3, halo: 0.12, flow: 0.5, wave: 0.04, react: 0 },
+};
 
 const hexRGB = (h: string) => {
   const n = parseInt(h.replace("#", ""), 16);
@@ -48,11 +79,9 @@ const hexRGB = (h: string) => {
 const vert = /* glsl */ `
 uniform float uRadius;
 out vec2 vP;
-out vec3 vCenter;
 void main() {
   vec4 c = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
   vP = position.xy * ${EXTENT.toFixed(3)};
-  vCenter = c.xyz;
   gl_Position = projectionMatrix * vec4(c.xy + vP * uRadius, c.z, 1.0);
 }`;
 
@@ -61,125 +90,100 @@ const common = /* glsl */ `
 precision highp float;
 precision highp int;
 
-uniform float uRadius, uRadiusPx;
-uniform vec4  uDepth;        // projection terms for gl_FragDepth: (P[10], P[14], P[11], P[15])
-uniform float uFrame, uTime;
-uniform float uW[${LOOP}];
-uniform sampler2D uMap;
-uniform float uBright, uContrast, uOpacity;
-uniform vec3  uC0, uC1, uC2;
-uniform float uGrain, uGrainCell, uGrainFrame;
-uniform float uIdleW, uListenW, uVar, uVarTime, uFlowMix, uRadial, uListen, uSpeak;
-uniform vec3  uSpeakB;
-uniform float uCrop, uShadeAmt;
-uniform vec3  uShade;
+uniform float uClock, uFlow, uWave, uT;
+uniform float uStreaks, uFine, uRim, uBack, uPole, uHalo, uGrain, uExposure, uSeed;
+uniform vec3 uCore, uMid;
 
-vec2 mapUv(vec2 p) {
-  return vec2(p.x * ${REF.radius.toFixed(1)} + ${REF.cx.toFixed(1)}, -p.y * ${REF.radius.toFixed(1)} + ${REF.cy.toFixed(1)}) / ${REF.size.toFixed(1)};
+#define TAU 6.28318530718
+
+vec3 lightPath(float t) {
+  float a = TAU * t, b = 2.0 * a;
+  return vec3(
+    -0.7 - 0.448 * cos(a) - 0.033 * sin(a) + 0.172 * cos(b) + 0.041 * sin(b),
+    0.9 - 0.59 * cos(a) - 0.597 * sin(a) + 0.207 * cos(b) - 0.187 * sin(b),
+    1.0 + 0.6 * (0.132 * cos(a) - 0.091 * sin(a) - 0.117 * cos(b) + 0.246 * sin(b)));
 }
-float waveAt(float f) {
-  f = mod(f, ${LOOP}.0);
-  int i = int(floor(f));
-  int j = i + 1; if (j >= ${LOOP}) j = 0;
-  return mix(uW[i], uW[j], f - float(i));
+float h13(vec3 p) {
+  p = fract(p * vec3(0.1031, 0.1030, 0.0973));
+  p += dot(p, p.yzx + 33.33);
+  return fract((p.x + p.y) * p.z);
 }
-vec3 palette(float l) {
-  float t = clamp(l / 0.77, 0.0, 1.0);
-  return t < 0.5 ? mix(uC0, uC1, t * 2.0) : mix(uC1, uC2, t * 2.0 - 1.0);
-}
-uvec3 pcg3d(uvec3 v) {
-  v = v * 1664525u + 1013904223u;
-  v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
-  v ^= v >> 16u;
-  v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
-  return v;
-}
-float gauss(vec2 cell) {
-  vec3 u = vec3(pcg3d(uvec3(ivec3(int(cell.x) + 4096, int(cell.y) + 4096, int(uGrainFrame))))) / 4294967295.0;
-  return (u.x + u.y + u.z - 1.5) * 2.0;
-}
-float grain(vec2 px) {
-  if (uGrainCell <= 1.0) return gauss(floor(px)) * uGrainCell;
-  vec2 g = px / uGrainCell, i = floor(g), f = g - i;
+float vn(vec3 x) {
+  vec3 i = floor(x), f = fract(x);
   f = f * f * (3.0 - 2.0 * f);
-  float n = mix(mix(gauss(i), gauss(i + vec2(1, 0)), f.x), mix(gauss(i + vec2(0, 1)), gauss(i + vec2(1, 1)), f.x), f.y);
-  return n * 1.45;
+  return mix(
+    mix(mix(h13(i), h13(i + vec3(1, 0, 0)), f.x), mix(h13(i + vec3(0, 1, 0)), h13(i + vec3(1, 1, 0)), f.x), f.y),
+    mix(mix(h13(i + vec3(0, 0, 1)), h13(i + vec3(1, 0, 1)), f.x), mix(h13(i + vec3(0, 1, 1)), h13(i + vec3(1, 1, 1)), f.x), f.y),
+    f.z);
 }
-
-// the orb's colour at disc point v (1 = rim). noise is the film grain to add; shaded applies the lower shade.
-vec3 orbColor(vec2 v, float noise, bool shaded) {
-  // the reference orb, scaled up inside a circular mask so its rim light falls outside
-  vec2 p = v / uCrop;
-  float r = length(p);
-  float inner = 1.0 - smoothstep(0.0, 0.9, r);
-  vec2 q = p;
-  q += uListen * 0.05 * vec2(sin(p.y * 3.1 + uTime * 1.7), sin(p.x * 2.7 - uTime * 1.3)) * (1.0 - r * r);
-  vec2 eye = vec2(0.0, 0.05);
-  q += uVar * 0.018 * vec2(sin(uVarTime * 0.09), sin(uVarTime * 0.13 + 1.7)) * inner;
-  q = eye + (q - eye) * (1.0 - uIdleW * 0.03 * sin(uTime * 0.65) * inner);
-  q = eye + (q - eye) * (1.0 - uListenW * 0.07 * inner);
-  q = eye + (q - eye) * (1.0 - 0.16 * uSpeak * inner);
-
-  float tau = texture(uMap, mapUv(q)).r;
-  if (uFlowMix > 0.001) {
-    vec2 rel = (q - eye) / vec2(1.0, 0.86);
-    float dn = clamp(length(rel) / 0.95, 0.0, 1.0);
-    float th = atan(rel.x, rel.y);
-    float ys = mix(0.95 - 1.9 * dn, -0.95 + 1.9 * dn, 0.5 + 0.5 * uRadial / uFlowMix);
-    float xs = 0.16 * sin(2.0 * th + 0.6) * sqrt(max(1.0 - ys * ys, 0.0));
-    tau = mix(tau, texture(uMap, mapUv(vec2(xs, ys))).r, 0.8 * uFlowMix);
+// the filaments on the sphere's surface at s
+float filaments(vec3 s) {
+  float ph = uT * TAU;
+  float lon = atan(s.x, s.z);
+  float fy = 0.6 * sin(ph * 5.0 + s.x * 2.0);
+  vec2 c = vec2(cos(lon), sin(lon));
+  float n1 = vn(vec3(c * uStreaks, s.y * 1.1 + uSeed + 0.7 * sin(ph) + uFlow));
+  float n2 = vn(vec3(c * uStreaks * 2.7 + 7.1, s.y * 1.6 + uSeed * 1.7 + 0.7 * cos(ph) - uFlow * 1.4));
+  float n3 = vn(vec3(c * uStreaks * 7.0 + 3.3, s.y * 0.9 + uSeed * 0.6 + uFlow * 0.5 + fy));
+  float n = smoothstep(0.3, 0.95, n1 * 0.55 + n2 * 0.35 + n3 * uFine * 0.45);
+  return n * n * 1.6 * (1.0 + uWave * (0.55 + 0.45 * sin(abs(s.y) * 11.0 - uClock * 9.0)));
+}
+// light at disc point p (1 = the sphere's edge): both sides of the sphere, the flares and the halo
+float shade(vec2 p) {
+  float r2 = dot(p, p), d = sqrt(r2), I = 0.0;
+  if (r2 < 1.0) {
+    float z = sqrt(1.0 - r2);
+    float w = mix(0.3, 0.12 + pow(1.0 - z, 1.4) * 1.7, uRim);
+    I += (filaments(vec3(p, z)) + filaments(vec3(p.x, p.y, -z)) * uBack) * w;
+    vec2 ld = lightPath(uT - 0.04).xy * 0.5;
+    I *= 0.55 + 0.95 * pow(clamp(dot(p, ld) * 0.5 + 0.5, 0.0, 1.3), 2.0);
+    I *= smoothstep(1.0, 0.93, d);
   }
-  float gain = texture(uMap, mapUv(p)).g;
-  tau += uListen * 5.0 * sin(r * 9.0 - uTime * 4.0) * inner;
-  tau += uVar * (3.0 * sin(uVarTime * 0.11 + r * 2.3) + 2.0 * sin(uVarTime * 0.07 - p.y * 3.1));
-  tau += uSpeak * 7.0 * inner + uSpeakB.y * 4.0 * sin(r * 6.0 + uTime * 1.2) + uSpeakB.z * 2.0 * (1.0 - inner);
-
-  float lum = gain * waveAt(uFrame - tau);
-  lum *= 1.0 + 0.12 * uSpeak;
-  lum = (lum - 0.38) * uContrast + 0.38 + uBright;
-  float gw = mix(0.72, 1.0, smoothstep(0.0, 0.15, lum)) * (1.0 - 0.25 * smoothstep(0.55, 0.78, lum));
-  lum += noise * gw;
-  vec3 col = palette(lum);
-  if (!shaded) return col;
-
-  // lower half multiplied down, shaded on the sphere (a light above and a little in front) so the bands curve
-  // round it rather than cutting straight across. Down the middle it follows the design's stops:
-  // clear to 33% below centre, 22% at 63%, full at the base.
-  vec3 n = vec3(v, sqrt(max(0.0, 1.0 - dot(v, v))));
-  float lit = dot(n, vec3(0.0, 0.857, 0.514));
-  float sa = pow(clamp((0.208 - lit) / 0.876, 0.0, 1.0), 1.65);
-  return col * mix(vec3(1.0), uShade, clamp(sa * uShadeAmt, 0.0, 1.0));
+  float wob = 0.1 * sin(uT * TAU * 2.0 + uSeed);
+  vec2 pt = (p - vec2(wob, 0.86)) * vec2(1.0, 1.5), pb = (p - vec2(-wob * 0.6, -0.87)) * vec2(1.0, 1.5);
+  float pf = 1.0 + 0.35 * sin(uT * TAU * 7.0 + uSeed);
+  I += uPole * pf * (exp(-dot(pt, pt) * 55.0) + 0.8 * exp(-dot(pb, pb) * 65.0));
+  I += uPole * 0.18 * (exp(-length(pt) * 5.0) + exp(-length(pb) * 6.0));
+  I += uHalo * 0.3 * exp(-abs(d - 0.93) * 3.2);
+  return I;
+}
+// light around p, blurred with stochastic samples: smear vertically, jitter sideways
+float blurred(vec2 p, float jitter, float smear, int n) {
+  float j = h13(vec3(gl_FragCoord.xy, uT * 97.0 + 1.0));
+  float jx = h13(vec3(gl_FragCoord.yx * 0.71, uT * 53.0 + 5.0)) - 0.5;
+  float I = 0.0, ws = 0.0;
+  for (int i = 0; i < n; i++) {
+    float k = (float(i) + j) / float(n) - 0.5;
+    float w = exp(-k * k * 6.0);
+    I += shade(p + vec2(k * 0.03 + jx * jitter, k * smear)) * w;
+    ws += w;
+  }
+  return I / ws;
+}
+// the reference's Ink mode: light becomes density of colour, premultiplied, so the page shows through
+vec4 ink(float I) {
+  I *= lightPath(uT - 0.04).z;
+  I *= 1.0 + (h13(vec3(gl_FragCoord.xy * 1.37, uT * 61.0 + 3.0)) - 0.5) * uGrain;
+  float t = 1.0 - exp(-I * uExposure);
+  float a = clamp(t * 1.15, 0.0, 1.0);
+  return vec4(mix(uMid, uCore, smoothstep(0.45, 1.0, t)) * a, a);
 }
 `;
 
 const frag = /* glsl */ `
 ${common}
+uniform float uSmear;
 in vec2 vP;
-in vec3 vCenter;
 layout(location = 0) out highp vec4 outColor;
 
 void main() {
-  float rs = length(vP);
-  vec2 p = vP / uCrop;
-  float e = max(rs, length(p / vec2(${(226.5 / REF.radius).toFixed(4)}, ${(229.7 / REF.radius).toFixed(4)})));
-  float aa = max(1.2 / uRadiusPx, ${(1.3 / REF.radius).toFixed(4)});
-  float disc = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, e);
-  if (disc < 0.002) discard;
-
-  vec3 col = orbColor(vP, grain(gl_FragCoord.xy) * uGrain, true);
-
-  // sphere impostor depth: the front surface of a sphere of radius uRadius around vCenter
-  float z = sqrt(max(0.0, 1.0 - min(rs * rs, 1.0))) * uRadius;
-  float vz = vCenter.z + z;
-  float cz = uDepth.x * vz + uDepth.y;
-  float cw = uDepth.z * vz + uDepth.w;
-  gl_FragDepth = clamp(cz / cw * 0.5 + 0.5, 0.0, 1.0);
-
-  outColor = vec4(col, disc * uOpacity);
+  float mask = 1.0 - clamp((length(vP) - ${MASK_FROM.toFixed(3)}) / ${(MASK_TO - MASK_FROM).toFixed(3)}, 0.0, 1.0);
+  if (mask < 0.002) discard;
+  outColor = ink(blurred(vP, 0.035, uSmear, 12)) * mask;
 }`;
 
-// The orb mirrored in the floor: one diameter lower, its own colours (before the lower shade, as the
-// design's reflection is the orb's blue), blurring more and fading out the further it gets from the base.
+// The orb mirrored in the floor: one diameter lower, blurring more and fading out the further it gets from the
+// base. It is made of the same light, so it stays as airy as the orb and only exists where the orb has density.
 const reflVert = /* glsl */ `
 uniform float uRadius;
 out vec2 vP;
@@ -195,153 +199,103 @@ uniform float uRefl;
 in vec2 vP;
 layout(location = 0) out highp vec4 outColor;
 
-const vec2 TAPS[12] = vec2[12](
-  vec2(-0.326, -0.406), vec2(-0.840, -0.074), vec2(-0.696, 0.457), vec2(-0.203, 0.621),
-  vec2(0.962, -0.195), vec2(0.473, -0.480), vec2(0.519, 0.767), vec2(0.185, -0.893),
-  vec2(0.507, 0.064), vec2(0.896, 0.412), vec2(-0.322, -0.933), vec2(-0.792, -0.598));
-
 void main() {
   // distance from the contact point, measured in an ellipse lying on the floor (wide, shallow), so the fade
-  // rings out round the base instead of running in straight bands; 1 = 0.48 radii straight down
-  float far = length(vec2(vP.x * 0.36, max(0.0, 0.976 - vP.y))) / 0.476;
-  float fade = exp(-2.8 * far * far);
-  if (fade < 0.004) discard;
-  // progressive blur: sharp at the contact, ~0.15 radii soft by the old fade line, a little more in the tail
-  float bf = min(far, 1.3);
-  float blur = mix(0.012, 0.15, bf * bf * (3.0 - 2.0 * min(bf, 1.0)));
-  vec2 m = vec2(vP.x, -vP.y);
-  vec3 acc = orbColor(m, 0.0, false);
-  for (int i = 0; i < 12; i++) {
-    vec2 s = m + TAPS[i] * blur;
-    acc += orbColor(s * min(1.0, 0.985 / max(length(s), 1e-4)), 0.0, false);
-  }
-  vec3 col = acc / 13.0;
-  float edge = max(blur, 2.0 / uRadiusPx);
-  float disc = 1.0 - smoothstep(1.0 - edge, 1.0 + edge, length(vP));
-  float a = uRefl * disc * fade * uOpacity;
+  // rings out round the base instead of running in straight bands
+  float far = length(vec2(vP.x * 0.36, max(0.0, 0.976 - vP.y))) / 0.6;
+  float fade = exp(-2.4 * far * far);
+  float a = uRefl * fade * (1.0 - clamp((length(vP) - ${MASK_FROM.toFixed(3)}) / ${(MASK_TO - MASK_FROM).toFixed(3)}, 0.0, 1.0));
   if (a < 0.002) discard;
-  outColor = vec4(col, a);
+  // a wide blur needs more samples than the orb's, or its bright flare breaks up into speckles
+  float blur = mix(0.05, 0.3, min(far, 1.0));
+  outColor = ink(blurred(vec2(vP.x, -vP.y), blur, blur, 24)) * a;
 }`;
+
+/** the look's values that ease when the style changes (the loop and the pattern change at once) */
+const EASED = ["streaks", "fine", "smear", "rim", "back", "pole", "halo", "exposure", "grain"] as const;
 
 export class Orb {
   readonly group = new THREE.Group();
   readonly mesh: THREE.Mesh;
   /** mirror image on the floor, drawn under the grid and contact shadow */
   readonly reflection: THREE.Mesh;
-  readonly ready: Promise<void>;
   params: OrbParams;
-  drive: OrbDrive = { state: "idle", listen: 0, speak: 0, bands: [0, 0, 0] };
+  drive: OrbDrive = { state: "idle", listen: 0, speak: 0 };
 
   private uniforms: Record<string, THREE.IUniform>;
-  private weight = { listening: 0, speaking: 0, thinking: 0 };
-  private d = { listen: 0, speak: 0, voice: 0, mic: 0, speakB: [0, 0, 0] };
-  private frameClock = 0;
-  private time = 0;
-  private varTime = 0;
-  private rate = 1;
+  private style: OrbStyle = 1;
+  /** the look as currently shown, easing toward the style's */
+  private look: OrbLook;
+  private cur = { ...STATES.idle };
+  private level = 0;
+  private thinking = 0;
+  private clock = 0;
+  private flow = 0;
+  private phase = 0;
   /** eased activity of the orb (0..1); the floor reads it for glow */
   energy = 0;
-  /** hue turn of the current (tinted) orb from its configured colours; the lower shade follows it */
+  /** hue turn of the current (tinted) orb from its configured colours; the floor follows it */
   hueShift = 0;
 
   constructor(params: OrbParams) {
     this.params = { ...params };
-    const tex = new THREE.DataTexture(new Uint16Array(500 * 500 * 2), 500, 500, THREE.RGFormat, THREE.HalfFloatType);
-    tex.magFilter = tex.minFilter = THREE.LinearFilter;
-    tex.generateMipmaps = false;
-    // shipped gzipped (half the size); a host may already have unzipped it on the way, so check the magic bytes
-    this.ready = fetch("/orb/delay.bin.gz")
-      .then((r) => {
-        if (!r.ok) throw new Error("Could not load /orb/delay.bin.gz");
-        return r.arrayBuffer();
-      })
-      .then((buf) => {
-        const head = new Uint8Array(buf, 0, 2);
-        if (head[0] !== 0x1f || head[1] !== 0x8b) return buf;
-        return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
-      })
-      .then((buf) => {
-        tex.image.data = new Uint16Array(buf);
-        tex.needsUpdate = true;
-      })
-      // the orb still draws without its motion field, just without the inner swirl
-      .catch((e) => console.error(e));
-
+    this.look = { ...params.looks[this.style] };
     const v3 = (h: string) => new THREE.Vector3(...hexRGB(h));
     this.uniforms = {
       uRadius: { value: params.radius },
-      uRadiusPx: { value: 200 },
-      uDepth: { value: new THREE.Vector4(0, 0, 0, 1) },
-      uFrame: { value: 0 },
-      uTime: { value: 0 },
-      uW: { value: W },
-      uMap: { value: tex },
-      uBright: { value: params.brightness },
-      uContrast: { value: params.contrast },
-      uOpacity: { value: 1 },
-      uC0: { value: v3(params.shadow) },
-      uC1: { value: v3(params.mid) },
-      uC2: { value: v3(params.highlight) },
-      uGrain: { value: GRAIN_STD * params.grain },
-      uGrainCell: { value: 1 },
-      uGrainFrame: { value: 0 },
-      uIdleW: { value: 1 },
-      uListenW: { value: 0 },
-      uVar: { value: 1 },
-      uVarTime: { value: 0 },
-      uFlowMix: { value: 0 },
-      uRadial: { value: 0 },
-      uListen: { value: 0 },
-      uSpeak: { value: 0 },
-      uSpeakB: { value: new THREE.Vector3() },
-      uCrop: { value: params.crop },
-      uShade: { value: v3(params.shade) },
-      uShadeAmt: { value: params.shadeAmount },
+      uClock: { value: 0 },
+      uFlow: { value: 0 },
+      uWave: { value: 0 },
+      uT: { value: 0 },
+      uStreaks: { value: 0 },
+      uFine: { value: 0 },
+      uSmear: { value: 0 },
+      uRim: { value: 0 },
+      uBack: { value: 0 },
+      uPole: { value: 0 },
+      uHalo: { value: 0 },
+      uGrain: { value: 0 },
+      uExposure: { value: 0 },
+      uSeed: { value: 0 },
+      uCore: { value: v3(params.highlight) },
+      uMid: { value: v3(params.mid) },
       uRefl: { value: params.reflection },
     };
-    const material = new THREE.ShaderMaterial({
-      glslVersion: THREE.GLSL3,
-      vertexShader: vert,
-      fragmentShader: frag,
-      uniforms: this.uniforms,
-      transparent: true,
-      depthWrite: true,
-      depthTest: true,
-    });
-    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
-    this.mesh.frustumCulled = false;
-    this.mesh.renderOrder = 2;
-    this.mesh.name = "orb";
-    // keep the impostor's depth in sync with whichever camera renders it
-    this.mesh.onBeforeRender = (_r, _s, camera) => {
-      const e = camera.projectionMatrix.elements;
-      (this.uniforms.uDepth.value as THREE.Vector4).set(e[10], e[14], e[11], e[15]);
-    };
-
-    const u = this.uniforms;
-    this.reflection = new THREE.Mesh(
-      new THREE.PlaneGeometry(2, 2),
+    const material = (vertexShader: string, fragmentShader: string) =>
       new THREE.ShaderMaterial({
         glslVersion: THREE.GLSL3,
-        vertexShader: reflVert,
-        fragmentShader: reflFrag,
-        uniforms: u,
+        vertexShader,
+        fragmentShader,
+        uniforms: this.uniforms,
         transparent: true,
+        premultipliedAlpha: true,
         depthWrite: false,
-        depthTest: false,
-      }),
-    );
+      });
+    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material(vert, frag));
+    this.mesh.frustumCulled = false;
+    // after the scene's objects (kit.ts), so they show through
+    this.mesh.renderOrder = 4;
+    this.mesh.name = "orb";
+
+    this.reflection = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material(reflVert, reflFrag));
+    (this.reflection.material as THREE.Material).depthTest = false;
     this.reflection.frustumCulled = false;
     this.reflection.renderOrder = -3;
     this.reflection.name = "orb-reflection";
 
     this.group.add(this.mesh, this.reflection);
     this.setParams(params);
+    this.writeLook(0);
   }
 
-  /** the highlight colour as currently shown (eases toward a tint) */
+  /** the dense colour as currently shown (eases toward a tint) */
   get highlightNow() {
-    return this.uniforms.uC2.value as THREE.Vector3;
+    return this.uniforms.uCore.value as THREE.Vector3;
+  }
+
+  /** the light colour as currently shown (eases toward a tint) */
+  get midNow() {
+    return this.uniforms.uMid.value as THREE.Vector3;
   }
 
   get radius() {
@@ -353,81 +307,65 @@ export class Orb {
     const r = this.params.radius;
     this.group.position.set(0, r, 0);
     this.uniforms.uRadius.value = r;
-    this.uniforms.uGrain.value = GRAIN_STD * this.params.grain;
-    const u = this.uniforms;
-    u.uCrop.value = this.params.crop;
-    (u.uShade.value as THREE.Vector3).set(...hexRGB(this.params.shade));
-    u.uShadeAmt.value = this.params.shadeAmount;
-    u.uRefl.value = this.params.reflection;
+    this.uniforms.uRefl.value = this.params.reflection;
   }
 
-  /** device pixels per world unit, for grain and edge anti-aliasing */
-  setPixelScale(pxPerUnit: number) {
-    const rpx = this.params.radius * pxPerUnit;
-    this.uniforms.uRadiusPx.value = rpx;
-    this.uniforms.uGrainCell.value = (1.05 * rpx) / REF.radius;
+  /** Switch style, easing the look across so it reads as one orb changing; `instant` jumps there. */
+  setStyle(style: OrbStyle, instant = false) {
+    this.style = style;
+    if (instant) this.look = { ...this.params.looks[style] };
   }
 
-  set opacity(v: number) {
-    this.uniforms.uOpacity.value = v;
+  /** ease the shown look toward the current style's by k (0..1) and hand it to the shader */
+  private writeLook(k: number) {
+    const { look, uniforms: u } = this;
+    const target = this.params.looks[this.style];
+    for (const key of EASED) look[key] += (target[key] - look[key]) * k;
+    look.loop = target.loop;
+    look.seed = target.seed;
+    u.uStreaks.value = look.streaks;
+    u.uFine.value = look.fine;
+    u.uSmear.value = look.smear;
+    u.uRim.value = look.rim;
+    u.uBack.value = look.back;
+    u.uGrain.value = look.grain;
+    u.uSeed.value = look.seed;
   }
 
   update(dt: number) {
     dt = Math.min(dt, 0.1);
-    const ease = (cur: number, target: number, k: number) => cur + (target - cur) * (1 - Math.exp(-dt * k));
-    const { drive, weight, d, params } = this;
+    const { drive, cur, uniforms: u } = this;
     // one bad value from a scene would poison the eased state for good: treat it as silence
     const ok = (v: number) => (Number.isFinite(v) ? v : 0);
-    drive.listen = ok(drive.listen);
-    drive.speak = ok(drive.speak);
-    drive.bands = [ok(drive.bands[0]), ok(drive.bands[1]), ok(drive.bands[2])];
-    const u = this.uniforms;
-    this.time += dt;
-    weight.listening = ease(weight.listening, drive.state === "listening" ? 1 : 0, 3);
-    weight.speaking = ease(weight.speaking, drive.state === "speaking" ? 1 : 0, 3);
-    weight.thinking = ease(weight.thinking, drive.state === "thinking" ? 1 : 0, 3);
+    const raw = drive.state === "listening" ? ok(drive.listen) : drive.state === "speaking" ? ok(drive.speak) : 0;
 
-    const follow = (cur: number, target: number) => ease(cur, target, target > cur ? 14 : 4);
-    d.listen = follow(d.listen, drive.listen * weight.listening);
-    d.mic = ease(d.mic, drive.listen, drive.listen > d.mic ? 14 : 7);
-    d.voice = ease(d.voice, drive.speak, drive.speak > d.voice ? 14 : 7);
-    d.speak = follow(d.speak, drive.speak * weight.speaking);
-    for (let i = 0; i < 3; i++) d.speakB[i] = follow(d.speakB[i], drive.bands[i] * weight.speaking);
+    const target = STATES[drive.state];
+    const k = 1 - Math.exp(-dt * 5);
+    for (const key of Object.keys(target) as (keyof typeof target)[]) cur[key] += (target[key] - cur[key]) * k;
+    this.level += (raw - this.level) * Math.min(1, (raw > this.level ? 30 : 7) * dt);
+    this.clock += dt;
+    this.flow += dt * (cur.flow + this.level * cur.react * 1.2);
+    this.writeLook(k);
+    const { look } = this;
+    const speed = (cur.spin * (1 + this.level * cur.react * 0.5) * this.params.speed) / Math.max(0.1, look.loop);
+    this.phase = (this.phase + dt * speed) % 1;
 
-    const wIdle = Math.max(0, 1 - weight.listening - weight.speaking - weight.thinking);
-    const stateRate =
-      wIdle * 0.45 + weight.thinking * 0.9 + weight.listening * (0.08 + 1.4 * d.mic) + weight.speaking * (0.05 + 2.2 * d.voice);
-    const wander = 1 + 0.12 * Math.sin(this.varTime * 0.17) * Math.sin(this.varTime * 0.071 + 1);
-    const target = params.speed * stateRate * wander;
-    this.rate = ease(this.rate, target, target > this.rate ? 5 : 3.5);
-    this.frameClock = (((this.frameClock + dt * FPS * this.rate) % LOOP) + LOOP) % LOOP;
+    const r = this.level * cur.react;
+    const breathe = cur.breathe * Math.sin(this.clock * 2.4);
+    u.uClock.value = this.clock;
+    u.uFlow.value = this.flow;
+    u.uT.value = this.phase;
+    u.uWave.value = cur.wave + r * 1.1;
+    u.uPole.value = look.pole * (1 + cur.pole + r * 0.7);
+    u.uHalo.value = look.halo * (1 + cur.halo + r * 0.3);
+    u.uExposure.value = look.exposure * (1 + cur.exp + r * 0.3 + breathe * 3);
 
-    const k = 8;
-    (u.uC0.value as THREE.Vector3).lerp(new THREE.Vector3(...hexRGB(params.shadow)), 1 - Math.exp(-dt * k));
-    (u.uC1.value as THREE.Vector3).lerp(new THREE.Vector3(...hexRGB(params.mid)), 1 - Math.exp(-dt * k));
-    (u.uC2.value as THREE.Vector3).lerp(new THREE.Vector3(...hexRGB(params.highlight)), 1 - Math.exp(-dt * k));
-    (u.uShade.value as THREE.Vector3).set(...hexRGB(shiftHue(params.shade, this.hueShift)));
-    u.uBright.value = ease(u.uBright.value, params.brightness, k);
-    u.uContrast.value = ease(u.uContrast.value, params.contrast, k);
+    const ease = 1 - Math.exp(-dt * 8);
+    (u.uCore.value as THREE.Vector3).lerp(new THREE.Vector3(...hexRGB(this.params.highlight)), ease);
+    (u.uMid.value as THREE.Vector3).lerp(new THREE.Vector3(...hexRGB(this.params.mid)), ease);
 
-    u.uFrame.value = this.frameClock;
-    u.uTime.value = this.time;
-    u.uGrainFrame.value = Math.floor(this.time * 1) % 100000;
-    u.uIdleW.value = wIdle;
-    u.uListenW.value = weight.listening;
-    const activity = wIdle + weight.thinking + weight.listening * d.mic + weight.speaking * d.voice;
-    this.varTime += dt * Math.min(1, activity);
-    u.uVarTime.value = this.varTime;
-
-    // flow: every state rises bottom → top, like the brand orb (set -1 inward / 1 outward to experiment)
-    const dir = { idle: 0, listening: 0, thinking: 0, speaking: 0 }[drive.state];
-    u.uFlowMix.value = ease(u.uFlowMix.value, Math.abs(dir), 1.6);
-    u.uRadial.value = ease(u.uRadial.value, dir, 1.6);
-    u.uListen.value = d.listen;
-    u.uSpeak.value = d.speak;
-    (u.uSpeakB.value as THREE.Vector3).set(d.speakB[0], d.speakB[1], d.speakB[2]);
-
-    this.energy = ease(this.energy, Math.min(1, 0.25 + 0.75 * Math.max(d.listen, d.speak, weight.thinking * 0.6)), 6);
+    this.thinking += ((drive.state === "thinking" ? 1 : 0) - this.thinking) * k;
+    this.energy += (Math.min(1, 0.25 + 0.75 * Math.max(this.level, this.thinking * 0.6)) - this.energy) * (1 - Math.exp(-dt * 6));
   }
 
   /** Jump eased state straight to the drive's targets (used before deterministic exports). */
@@ -440,6 +378,5 @@ export class Orb {
     (this.mesh.material as THREE.Material).dispose();
     this.reflection.geometry.dispose();
     (this.reflection.material as THREE.Material).dispose();
-    (this.uniforms.uMap.value as THREE.Texture).dispose();
   }
 }
