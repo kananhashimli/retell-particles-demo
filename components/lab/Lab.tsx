@@ -387,7 +387,7 @@ export function Lab() {
             <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,876fr)_minmax(300px,456fr)] lg:gap-[60px]">
               <div className="relative aspect-[876/678] overflow-hidden rounded-[24px]" style={{ background: stage?.config.background ?? "#F5F5F8" }}>
                 <div ref={box} className="absolute inset-0" />
-                <ModelCards scene={scene} arch="cascaded" stage={stage} onScene={pickScene} />
+                <ModelCards scene={scene} arch="cascaded" stage={stage} />
                 <div className="absolute inset-x-0 top-4 flex justify-center">
                   <SceneTabs scene={scene} arch="cascaded" onScene={pickScene} />
                 </div>

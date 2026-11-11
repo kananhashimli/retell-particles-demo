@@ -118,7 +118,7 @@ export function StageCard({ box, scene, stage, mobile, ready, arch, pickScene, s
     <div className="flex min-w-0 flex-col gap-6">
       <div className="relative aspect-square overflow-hidden rounded-[32px] md:aspect-[876/678]" style={{ background: CONFIG.background, ...style }}>
         <div ref={box} className="absolute inset-0" />
-        {!mobile && <ModelCards scene={scene} arch={arch} stage={stage} onScene={pickScene} show={ready} />}
+        {!mobile && <ModelCards scene={scene} arch={arch} stage={stage} show={ready} />}
         <div className={`absolute inset-x-0 top-3 flex justify-center px-3 transition-opacity duration-700 md:top-4 ${ready ? "opacity-100" : "opacity-0"}`}>
           <div className="max-w-full overflow-x-auto [scrollbar-width:none]">
             <SceneTabs scene={scene} arch={arch} onScene={pickScene} />
@@ -126,7 +126,7 @@ export function StageCard({ box, scene, stage, mobile, ready, arch, pickScene, s
         </div>
         <StylePicker className="absolute bottom-4 right-4" />
       </div>
-      {mobile && <ModelCards scene={scene} arch={arch} stage={stage} onScene={pickScene} show={ready} mobile />}
+      {mobile && <ModelCards scene={scene} arch={arch} stage={stage} show={ready} mobile />}
     </div>
   );
 }
