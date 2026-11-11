@@ -5,6 +5,7 @@ export const DEFAULT_CONFIG: StageConfig = {
   direction: "line",
   scene: "denoise",
   playing: true,
+  arch: "cascaded",
   speed: 1,
   autoplay: true,
   background: "#F6F6F8",

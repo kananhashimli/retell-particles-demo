@@ -5,7 +5,7 @@ import type { Kit } from "./kit";
 
 export type DirectionId = "line" | "particles";
 export type StepId = "listen" | "think" | "speak";
-export type SceneId = "denoise" | "turns" | "ivr" | "llm" | "harness" | "flow" | "colloquial" | "guardrails" | "voices";
+export type SceneId = "denoise" | "turns" | "ivr" | "llm" | "s2s" | "harness" | "flow" | "colloquial" | "guardrails" | "voices";
 /** Cascaded (STT → Tell-1 → TTS-style text pipeline) or speech-to-speech agents: same layout, different cards */
 export type Arch = "cascaded" | "s2s";
 
@@ -23,7 +23,8 @@ export const STEPS: { id: StepId; title: string; blurb: string; scenes: SceneId[
     title: "Reasoning & orchestration",
     blurb: "Bring together models, knowledge, and tools to move every conversation forward.",
     scenes: ["llm", "harness"],
-    s2s: ["llm", "harness"],
+    // speech-to-speech has its own scene in Tell-1's place: one unbroken stream instead of a text pipeline
+    s2s: ["s2s", "harness"],
   },
   {
     id: "speak",
@@ -40,7 +41,8 @@ export const SCENES: Record<SceneId, { step: StepId; title: string; tab: string;
   denoise: { step: "listen", title: "Denoising Model", tab: "Denoising" },
   turns: { step: "listen", title: "Turn-Taking Model", tab: "Turn-taking" },
   ivr: { step: "listen", title: "Voicemail & IVR Detection", tab: "Voicemail & IVR" },
-  llm: { step: "think", title: "Tell-1", tab: "Tell-1", s2s: { title: "Speech-to-speech model", tab: "Speech-to-speech" } },
+  llm: { step: "think", title: "Tell-1", tab: "Tell-1" },
+  s2s: { step: "think", title: "Speech-to-speech model", tab: "Speech-to-speech" },
   harness: { step: "think", title: "Retell Agent Harness", tab: "Agent harness" },
   flow: { step: "think", title: "Conversation flow", tab: "Flow" },
   colloquial: { step: "speak", title: "Colloquial Rewrite Model", tab: "Colloquial rewrite", s2s: { title: "Spoken response", tab: "Spoken response" } },
@@ -60,12 +62,14 @@ export const sceneLabel = (id: SceneId, arch: Arch = "cascaded") => (arch === "s
 /** the section's scenes (cascaded); "flow" and "voices" stay in the engine for the lab */
 export const SCENE_ORDER: SceneId[] = orderFor("cascaded");
 /** every scene the engine knows, for the lab */
-export const ALL_SCENES: SceneId[] = ["denoise", "turns", "ivr", "llm", "harness", "flow", "colloquial", "guardrails", "voices"];
+export const ALL_SCENES: SceneId[] = ["denoise", "turns", "ivr", "llm", "s2s", "harness", "flow", "colloquial", "guardrails", "voices"];
 
 export interface StageConfig {
   direction: DirectionId;
   scene: SceneId;
   playing: boolean;
+  /** which architecture the section shows: speech-to-speech gives each scene its own motion */
+  arch: Arch;
   speed: number;
   autoplay: boolean;
   background: string;
@@ -190,6 +194,8 @@ export interface SceneContext {
   readonly lines: LineLook;
   /** how far the orb's hue is turned by a tint right now (1 = full turn); accents follow it */
   readonly hueShift: number;
+  /** the architecture shown; scenes ease into their speech-to-speech motion with archBlend */
+  readonly arch: Arch;
 }
 
 export interface FrameInfo {

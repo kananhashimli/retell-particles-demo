@@ -95,6 +95,15 @@ function wiggle(L: ParticleLook, g: Grain, t: number, D: number, out: number[]) 
   return out;
 }
 
+/**
+ * 0..1, how far a scene has eased into its speech-to-speech motion. Call once per frame with dt; the
+ * toggle never jumps the scene, it turns into the other motion over about a second.
+ */
+function archBlend(ctx: SceneContext) {
+  let m = ctx.arch === "s2s" ? 1 : 0;
+  return (dt: number) => (m += ((ctx.arch === "s2s" ? 1 : 0) - m) * (1 - Math.exp(-dt * 3)));
+}
+
 // ------------------------------------------------------------------ Listen · Denoising (dust → streaks)
 // The room is a grey cloud of jittering dust. A clearing front leaves the orb; behind it the dust
 // settles onto the floor and flows round in calm blue lanes.
@@ -139,11 +148,16 @@ const denoise: SceneDef = {
       return { r, rl, a: rand() * TAU, y: 0.05 + Math.pow(rand(), 1.7) * P0.cloud, w, g: grain(i) };
     });
     const off = [0, 0];
+    const blend = archBlend(ctx);
 
     return {
-      update({ t, age, presence, loopOut }) {
+      update({ t, age, dt, presence, loopOut }) {
         const C = palette(ctx);
         const P = params<typeof DENOISE>(ctx);
+        // speech-to-speech: the cleaned lanes don't just circle, they spiral into the orb — the clean voice
+        // streams straight into the model as audio. Each lane's dots drift inward and come back in at the rim.
+        const s2s = blend(dt);
+        const rIn = R * 1.25, span = P0.outer - rIn;
         const L = ctx.particles;
         const W = t < P.waveStart ? 0 : R * 1.1 + easeOut((t - P.waveStart) / P.waveTime) * (P0.outer + P.front + 0.2 - R * 1.1);
         // the loop starts and ends empty, unless a morph brings the dots in or the next scene takes them
@@ -163,15 +177,20 @@ const denoise: SceneDef = {
           const cy = p.y + Math.sin(t * ws[4] + ph * 2.3) * P.bob;
           // calm: lanes flowing round just above the floor, with the shared idle wiggle
           wiggle(L, p.g, t, D, off);
-          const rl = p.rl + off[0], ly = 0.02 + off[1];
+          const inflow = 0.45 * s2s * Math.max(0, t - P.waveStart);
+          const rs = rIn + ((((p.rl - rIn - inflow) % span) + span) % span);
+          const rim = s2s > 0.01 ? smooth(rIn, rIn + 0.35, rs) * (1 - smooth(P0.outer - 0.5, P0.outer, rs)) : 1;
+          const rl = lerp(p.rl, rs, s2s) + off[0], ly = 0.02 + off[1];
           const w = P.flow / p.rl;
           const ha = p.a - t * w, ta = ha + w * P.trail;
+          // the tail trails outward too while spiralling in, so each streak points along its spiral
+          const tr = rl + 0.45 * s2s * P.trail;
           const x = lerp(cx, Math.cos(ha) * rl, c), y = lerp(cy, ly, c), z = lerp(cz, Math.sin(ha) * rl, c);
-          const tx = lerp(x, Math.cos(ta) * rl, c), tz = lerp(z, Math.sin(ta) * rl, c);
+          const tx = lerp(x, Math.cos(ta) * tr, c), tz = lerp(z, Math.sin(ta) * tr, c);
           const vis = inOrb(x, y, z, R) ? 0 : 1;
-          const near = 1 - smooth(R * 1.2, P0.outer, p.rl);
+          const near = 1 - smooth(R * 1.2, P0.outer, lerp(p.rl, rl, s2s));
           dust.set(i, x, y, z, L.size * p.g.s, C.ink, (1 - c) * P.dotOpacity * fade * vis * (0.75 + 0.25 * Math.sin(t * ws[5] + ph)));
-          streaks.set(i, tx, ly, tz, x, y, z, L.size * p.g.s, mix3(C.accent, C.high, near * 0.6), c * P.streakOpacity * fade * vis * (0.55 + 0.45 * near));
+          streaks.set(i, tx, ly, tz, x, y, z, L.size * p.g.s, mix3(C.accent, C.high, near * 0.6), c * P.streakOpacity * fade * vis * rim * (0.55 + 0.45 * near));
         }
         streaks.tail = P.tail;
         dust.commit();
@@ -298,10 +317,14 @@ const turns: SceneDef = {
       return { ...m, l };
     });
 
+    const blend = archBlend(ctx);
+
     return {
-      update({ t, age, presence }) {
+      update({ t, age, dt, presence }) {
         const C = palette(ctx);
         const P = params<typeof TURNS_P>(ctx);
+        // speech-to-speech: the caller is sound too, not a written line — both sides are dots
+        const s2s = blend(dt);
         const L = ctx.particles;
         // slow continuous spin on scene time (not loop time), so it never jumps when the loop restarts
         const a0 = Math.PI * 0.75 + THREE.MathUtils.degToRad(P.rotation + P.spin * age);
@@ -334,19 +357,21 @@ const turns: SceneDef = {
           }
           l.setPoints(pos.subarray(s * 3, stop * 3), lcol.subarray(s * 3, stop * 3));
           l.material.linewidth = P.lineWidth;
-          l.opacity = P.lineOpacity * presence;
+          l.opacity = P.lineOpacity * presence * (1 - s2s);
         });
         for (let k = callerRuns.length; k < MAXRUNS; k++) runs[k].opacity = 0;
         // agent: the same wave, drawn in particles with the shared size, scatter and idle wiggle
         for (let i = 0; i < STEPS; i++) {
-          if (i >= upto || !agent[i]) {
+          if (i >= upto || (!agent[i] && s2s < 0.01)) {
             dots.color[i * 4 + 3] = 0;
             continue;
           }
           const g = grains[i];
           wiggle(L, g, t, D, off);
           const a = angle((i / STEPS) * D);
-          dots.set(i, Math.cos(a) * (r + off[0]), pos[i * 3 + 1] + off[1], Math.sin(a) * (r + off[0]), L.size * g.s, mix3(C.accent, C.high, 0.15), P.dotOpacity * presence * fresh((i / STEPS) * D));
+          const col = agent[i] ? mix3(C.accent, C.high, 0.15) : C.ink;
+          const op = agent[i] ? P.dotOpacity : P.lineOpacity * 0.75 * s2s;
+          dots.set(i, Math.cos(a) * (r + off[0]), pos[i * 3 + 1] + off[1], Math.sin(a) * (r + off[0]), L.size * g.s, col, op * presence * fresh((i / STEPS) * D));
         }
         dots.commit();
 
@@ -448,6 +473,112 @@ const llm: SceneDef = {
           }
         });
         field.commit();
+      },
+    };
+  },
+};
+
+// ------------------------------------------------------------------ Think · Speech-to-speech (one unbroken stream)
+// Where cascaded Tell-1 turns sound into text and back, a speech-to-speech model never leaves audio.
+// One ribbon of dots carries a voice wave in along a spiral arm, dives into the orb, and leaves on
+// the opposite arm as one S-shaped stream: no rings, no stations, no break. The wave is fixed to the
+// dots that carry it, so the shape that goes in is the shape that comes out — the tone survives.
+const S2S_P = {
+  outer: { value: 3.6, min: 2, max: 5, step: 0.05, label: "arm reach", rebuild: true },
+  swirl: { value: -60, min: -180, max: 180, step: 1, label: "arm swirl °", rebuild: true },
+  lanes: { value: 9, min: 1, max: 15, step: 1, rebuild: true },
+  width: { value: 0.45, min: 0.05, max: 1, step: 0.01, label: "ribbon width", rebuild: true },
+  loops: { value: 1, min: 1, max: 3, step: 1, label: "passes / loop" },
+  height: { value: 0.32, min: 0, max: 0.8, step: 0.005, label: "wave height" },
+  cycles: { value: 70, min: 10, max: 200, step: 1, label: "wave cycles" },
+  phrases: { value: 5, min: 1, max: 12, step: 1, label: "phrases" },
+  dive: { value: 0.7, min: 0, max: 1.2, step: 0.01, label: "dive into orb ×orb" },
+  opacity: { value: 0.6, min: 0, max: 1, step: 0.01, label: "rest opacity" },
+  crestOpacity: { value: 1, min: 0, max: 1, step: 0.01, label: "crest opacity" },
+  ...LOOK,
+} satisfies ParamDefs;
+
+const s2s: SceneDef = {
+  duration: 9,
+  orb: "speaking",
+  params: S2S_P,
+  create(ctx) {
+    const { kit, group } = ctx;
+    const R = ctx.orbRadius;
+    const D = 9;
+    const P0 = params<typeof S2S_P>(ctx);
+    const Ri = R * 0.9, Ro = P0.outer;
+    const sw = THREE.MathUtils.degToRad(P0.swirl);
+    // the camera looks from +x+z: the caller arrives from screen left, the reply leaves to screen right
+    const th0 = Math.PI * 0.75;
+    // u in [0,1) runs the whole stream: [0,.5) the incoming arm, outer → orb; [.5,1) the outgoing arm, orb → outer.
+    // The outgoing arm is the incoming one turned half a turn, so together they make one S through the orb.
+    const at = (u: number, out: number[]) => {
+      const inc = u < 0.5;
+      const s = inc ? u * 2 : (1 - u) * 2; // 0 at the outer end, 1 at the orb
+      out[0] = lerp(Ro, Ri, s);
+      out[1] = th0 + (inc ? 0 : Math.PI) + sw * s;
+      out[2] = R * P0.dive * smooth(0.7, 1, s);
+      out[3] = s;
+      return out;
+    };
+    // the stream's length, to place the dots at the shared density
+    const q = [0, 0, 0, 0], q2 = [0, 0, 0, 0];
+    let len = 0;
+    for (let k = 0; k < 400; k++) {
+      at(k / 400, q);
+      at((k + 1) / 400, q2);
+      if (k === 199) continue; // the jump through the orb
+      len += Math.hypot(q2[0] * Math.cos(q2[1]) - q[0] * Math.cos(q[1]), q2[0] * Math.sin(q2[1]) - q[0] * Math.sin(q[1]), q2[2] - q[2]);
+    }
+    const NL = Math.round(P0.lanes);
+    const M = Math.max(60, Math.round(len * DOTS_PER_UNIT * ctx.particles.density));
+    const dots: { u: number; w: number; g: Grain }[] = [];
+    for (let l = 0; l < NL; l++) {
+      const w = NL > 1 ? (l / (NL - 1) - 0.5) * P0.width : 0;
+      const shift = hash(l * 7.3) / M;
+      for (let j = 0; j < M; j++) dots.push({ u: j / M + shift, w, g: grain(dots.length) });
+    }
+    const field = kit.particles(dots.length);
+    group.add(field);
+    const off = [0, 0];
+    const p = [0, 0, 0, 0];
+
+    return {
+      update({ t, presence }) {
+        const C = palette(ctx);
+        const P = params<typeof S2S_P>(ctx);
+        const L = ctx.particles;
+        const flow = (Math.round(P.loops) * t) / D;
+        const nph = Math.round(P.phrases);
+        // a voice, written onto the dots themselves: phrases of rolling waves with quiet between
+        const voice = (u0: number) => {
+          const x = u0 * nph, k = Math.floor(x), f = x - k;
+          const env = f > 0.8 ? 0 : Math.pow(Math.sin((Math.PI * f) / 0.8), 0.8) * (0.6 + 0.4 * hash(k * 4.7 + 1));
+          return env * (0.5 + 0.5 * Math.sin(TAU * P.cycles * u0));
+        };
+        let speak = 0;
+        for (let i = 0; i < dots.length; i++) {
+          const d = dots[i];
+          const u = (((d.u + flow) % 1) + 1) % 1;
+          at(u, p);
+          wiggle(L, d.g, t, D, off);
+          // the ribbon's width runs across the arm, narrowing as it dives into the orb
+          const r = p[0] + (d.w * (1 - p[3] * 0.6) + off[0]);
+          const k = voice(((d.u % 1) + 1) % 1);
+          const x = Math.cos(p[1]) * r, z = Math.sin(p[1]) * r;
+          const y = 0.02 + off[1] + p[2] + P.height * k * (1 - smooth(0.75, 1, p[3]));
+          const edge = smooth(0, 0.15, p[3]) * (inOrb(x, y, z, R) ? 0 : 1);
+          // the outgoing arm is the voice answered: fully lit; the incoming arm is the caller, a touch quieter
+          const lit = u < 0.5 ? 0.55 + 0.45 * k : 0.75 + 0.25 * k;
+          const col = mix3(C.ink, mix3(C.accent, C.high, k), lit);
+          field.set(i, x, y, z, L.size * lerp(1, L.emphasis, k) * d.g.s, col, lerp(P.opacity, P.crestOpacity, k) * edge * presence);
+          if (u >= 0.5 && p[3] > 0.85) speak = Math.max(speak, k);
+        }
+        field.commit();
+        // the orb speaks as the stream leaves it, with no pause to think first
+        ctx.orb.speak = 0.35 + 0.55 * speak;
+        ctx.orb.listen = 0.4;
       },
     };
   },
@@ -583,13 +714,16 @@ const colloquial: SceneDef = {
     const field = kit.particles(N);
     group.add(field);
     const off = [0, 0];
+    const blend = archBlend(ctx);
 
     return {
-      update({ t, presence }) {
+      update({ t, dt, presence }) {
         const C = palette(ctx);
         const P = params<typeof COLLOQUIAL>(ctx);
         const L = ctx.particles;
-        const spoken = (b: number) => smooth(P.spokenFrom, Math.max(P.spokenFrom + 0.01, P.spokenTo), b) * (1 - smooth(8.4, 9.8, b));
+        // speech-to-speech never had text to rewrite: the reply is spoken from its first wave, no flat written start
+        const s2s = blend(dt);
+        const spoken = (b: number) => lerp(smooth(P.spokenFrom, Math.max(P.spokenFrom + 0.01, P.spokenTo), b), 1, s2s) * (1 - smooth(8.4, 9.8, b));
         const waves = Math.round(P.waves);
         const v = (waves * P.wavelength) / D; // speed so a whole number of waves leave per loop
         const span = P0.outer - r0;
@@ -783,9 +917,12 @@ const ivr: SceneDef = {
     const grains = Array.from({ length: N }, (_, i) => grain(i));
     const sig = { v: 0, seg: -1, tone: 0 };
     const off = [0, 0];
+    const blend = archBlend(ctx);
 
     return {
-      update({ t, age, presence }) {
+      update({ t, age, dt, presence }) {
+        // speech-to-speech: the line widens into a three-lane ribbon, the stream the audio stays in
+        const s2s = blend(dt);
         const C = palette(ctx);
         const P = params<typeof IVR_P>(ctx);
         const L = ctx.particles;
@@ -817,7 +954,8 @@ const ivr: SceneDef = {
           const y = 0.015 + off[1] + (sig.v * P.height * Math.sin((cyc / k) * u * TAU) + (sig.v ? 0 : hiss));
           const col = mix3(C.ink, mix3(C.accent, C.high, sig.tone * 0.5), lit);
           const op = lerp(P.opacity * (sig.v ? 1 : 0.7), P.litOpacity, lit) * fresh * presence;
-          dots.set(i, Math.cos(a) * (r + off[0]), y, Math.sin(a) * (r + off[0]), L.size * lerp(1, L.emphasis, lit * sig.v) * g.s, col, op);
+          const lane = s2s * ((i % 3) - 1) * 0.11;
+          dots.set(i, Math.cos(a) * (r + lane + off[0]), y, Math.sin(a) * (r + lane + off[0]), L.size * lerp(1, L.emphasis, lit * sig.v) * g.s, col, op);
         }
         dots.commit();
         // a ring of light leaves the orb as each kind is recognised
@@ -877,11 +1015,14 @@ const harness: SceneDef = {
     const field = kit.particles(total);
     group.add(field);
     const off = [0, 0];
+    const blend = archBlend(ctx);
 
     return {
-      update({ t, age, presence }) {
+      update({ t, age, dt, presence }) {
         const C = palette(ctx);
         const P = params<typeof HARNESS_P>(ctx);
+        // speech-to-speech: the ring carries a slow sound wave and the comets travel as waves, not darts
+        const s2s = blend(dt);
         const L = ctx.particles;
         let i = 0;
         // the harness ring, drifting a whole number of dot gaps per loop
@@ -897,7 +1038,8 @@ const harness: SceneDef = {
           // the ring brightens a little near a busy node
           let near = 0;
           nodes.forEach((nd, k) => (near = Math.max(near, act[k] * Math.pow(Math.max(0, x * nd.dir.x + z * nd.dir.z), 18))));
-          field.set(i++, x * (rH + off[0]), 0.02 + off[1], z * (rH + off[0]), L.size * g.s, mix3(C.ink, C.accent, near), lerp(P.opacity, 0.9, near) * presence);
+          const swell = s2s * Math.pow(0.5 + 0.5 * Math.sin(ring[j].a * 9 - (TAU * 3 * t) / D), 2);
+          field.set(i++, x * (rH + off[0]), 0.02 + off[1] + 0.09 * swell, z * (rH + off[0]), L.size * g.s, mix3(C.ink, C.accent, Math.max(near, swell * 0.6)), lerp(P.opacity, 0.9, Math.max(near, swell * 0.5)) * presence);
         }
         // nodes: a small ring of dots with a centre dot, lifting and lighting while called
         nodes.forEach((nd, k) => {
@@ -932,7 +1074,8 @@ const harness: SceneDef = {
             const u = e.dir === "out" ? easeInOut(s) : 1 - easeInOut(s);
             const rad = lerp(R * 1.05, rH - P0.nodeSize, u);
             const fall = 1 - c / CN;
-            field.set(i++, nd.dir.x * rad, 0.04 + Math.sin(Math.PI * u) * P.arc, nd.dir.z * rad, L.size * lerp(1, L.emphasis * 1.2, fall) * (0.6 + 0.4 * fall), mix3(C.accent, C.high, fall), fall * presence);
+            const wob = s2s * 0.16 * Math.sin(TAU * (u * 3 - t * 1.5)) * Math.sin(Math.PI * u);
+            field.set(i++, nd.dir.x * rad - nd.dir.z * wob, 0.04 + Math.sin(Math.PI * u) * P.arc * (1 - s2s * 0.6), nd.dir.z * rad + nd.dir.x * wob, L.size * lerp(1, L.emphasis * 1.2, fall) * (0.6 + 0.4 * fall), mix3(C.accent, C.high, fall), fall * presence);
           }
         });
         field.commit();
@@ -1052,5 +1195,5 @@ export const particles: Direction = {
     camera: { azimuth: 45, elevation: 12, zoom: 1, height: 1.25, panX: 0, panY: 0 },
     particles: { size: 1.5, emphasis: 1.6, density: 1, scatter: 0.025, idle: 0.012, idleSpeed: 3, muted: "#1A1C22", active: "#3E6AEF", highlight: "#3E8CF7" },
   },
-  scenes: { denoise, turns, ivr, llm, harness, flow, colloquial, guardrails, voices },
+  scenes: { denoise, turns, ivr, llm, s2s, harness, flow, colloquial, guardrails, voices },
 };

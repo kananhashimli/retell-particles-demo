@@ -8,6 +8,21 @@ import { ModelCards } from "./section/ModelCards";
 import { getOrbStyle, useOrbStyle } from "./StylePicker";
 
 const CONFIG = defaultsFor("particles");
+/** speech-to-speech's palette: the cascaded cyan/blue turned to amber/orange, for the orb, the lit particles, lines and floor */
+const S2S_LOOK = {
+  orb: { mid: "#FFB020", highlight: "#FF5A1F" },
+  contactColor: "#FF5A1F",
+  accent: "#F26B1D",
+  particles: { active: "#F26B1D", highlight: "#FF9A3D" },
+  lines: { active: "#F26B1D" },
+};
+const CASCADED_LOOK = {
+  orb: { mid: CONFIG.orb.mid, highlight: CONFIG.orb.highlight },
+  contactColor: CONFIG.contactColor,
+  accent: CONFIG.accent,
+  particles: { active: CONFIG.particles.active, highlight: CONFIG.particles.highlight },
+  lines: { active: CONFIG.lines.active },
+};
 
 /** whether a media query matches, kept live (false while rendering on the server) */
 export const useMedia = (query: string) =>
@@ -49,7 +64,8 @@ export function useFlowStage({ autoplay, arch = "cascaded" }: { autoplay: boolea
   useEffect(() => {
     let st: Stage | null = null;
     try {
-      st = new Stage(box.current!, { ...CONFIG, camera: cameraFor(matchMedia(MOBILE).matches) });
+      // 2.5× the lab default: each tab's line fills, and autoplay moves on, sooner
+      st = new Stage(box.current!, { ...CONFIG, speed: CONFIG.speed * 2.5, camera: cameraFor(matchMedia(MOBILE).matches) });
       st.orb.setStyle(getOrbStyle(), true);
     } catch (e) {
       // no WebGL: the tabs and cards still work over the plain background
@@ -80,6 +96,8 @@ export function useFlowStage({ autoplay, arch = "cascaded" }: { autoplay: boolea
   }, []);
 
   useEffect(() => stage?.applyConfig({ autoplay }), [stage, autoplay]);
+  // speech-to-speech turns the scene orange, so the switch is felt; the orb eases between them and the lit particles follow its hue
+  useEffect(() => stage?.applyConfig({ ...(arch === "s2s" ? S2S_LOOK : CASCADED_LOOK), arch }), [stage, arch]);
   useEffect(() => stage?.applyConfig({ camera: cameraFor(mobile) }), [stage, mobile]);
   useEffect(() => stage?.orb.setStyle(style), [stage, style]);
 

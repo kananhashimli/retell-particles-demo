@@ -648,5 +648,5 @@ export const line: Direction = {
     camera: { azimuth: 45, elevation: 12, zoom: 1, height: 1.25, panX: 0, panY: 0 },
   },
   // the newer scenes have no line drawing of their own yet: they borrow the nearest one
-  scenes: { denoise, turns, ivr: turns, llm, harness: flow, flow, colloquial, guardrails: colloquial, voices },
+  scenes: { denoise, turns, ivr: turns, llm, s2s: llm, harness: flow, flow, colloquial, guardrails: colloquial, voices },
 };

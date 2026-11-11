@@ -89,7 +89,7 @@ export function ModelCards({ scene, arch, stage, mobile = false, show = true }: 
 function SceneCard({ scene, arch, reg }: { scene: SceneId; arch: Arch; reg: (key: string) => (el: HTMLElement | null) => void }) {
   const s2s = arch === "s2s";
   if (scene === "harness") return <Harness reg={reg} />;
-  if (scene === "llm") {
+  if (scene === "llm" || scene === "s2s") {
     return (
       <Card copy={s2s ? S2S_CORE : CARDS.llm!}>
         {s2s ? (

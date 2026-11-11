@@ -71,8 +71,10 @@ export function FlowTabs({ scene, onScene, progress, autoplay, arch = "cascaded"
                   <p className="max-w-[440px] pb-3 text-[14px] leading-[19px] tracking-[-0.01em] text-black/50 md:pb-4">{s.blurb}</p>
                   {/* the group's models: picking one plays its scene; the line beside it fills as it plays */}
                   <ul className="pb-3 md:pb-[17px]">
-                    {ids.map((id) => {
+                    {ids.map((id, j) => {
                       const on = id === scene;
+                      // models before the playing one have played through: their line stays full
+                      const done = j < ids.indexOf(scene);
                       return (
                         <li key={id}>
                           <button
@@ -83,6 +85,7 @@ export function FlowTabs({ scene, onScene, progress, autoplay, arch = "cascaded"
                             className={`relative flex w-full ${on ? "cursor-default" : "cursor-pointer"} items-baseline gap-3 py-1.5 pl-4 text-left text-[14px] leading-[19px] tracking-[-0.01em] transition-colors md:py-2 ${on ? "text-black" : "text-black/50 hover:text-black"}`}
                           >
                             <span className="absolute bottom-1.5 left-0 top-1.5 w-[2px] overflow-hidden rounded bg-line md:bottom-2 md:top-2">
+                              {done && <span className="absolute inset-0 bg-accent" style={{ opacity: autoplay ? 1 : 0.45 }} />}
                               {on && <span ref={bar} className="absolute inset-0 origin-top bg-accent" style={{ transform: "scaleY(0)", opacity: autoplay ? 1 : 0.45 }} />}
                             </span>
                             <span className="whitespace-nowrap">{sceneLabel(id, arch).tab}</span>

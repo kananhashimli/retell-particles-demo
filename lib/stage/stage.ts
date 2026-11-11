@@ -251,6 +251,9 @@ export class Stage {
       get hueShift() {
         return stage.orb.hueShift;
       },
+      get arch() {
+        return stage.config.arch ?? "cascaded";
+      },
     };
     const inst = def.create(ctx);
     const targets = fieldsOf(group);
