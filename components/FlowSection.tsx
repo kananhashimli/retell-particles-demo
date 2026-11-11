@@ -11,7 +11,7 @@ const ARCHS: { id: Arch; label: string }[] = [
   { id: "s2s", label: "Speech-to-speech" },
 ];
 
-/** Cascaded / speech-to-speech: the brief's two variants of the same layout. Same size and look as the stage's tab bar. */
+/** Cascaded / speech-to-speech: the brief's two variants of the same layout. */
 function ArchToggle({ arch, onArch, className = "" }: { arch: Arch; onArch: (a: Arch) => void; className?: string }) {
   return (
     <div role="group" aria-label="Agent architecture" className={`flex w-full items-center rounded-full bg-[#F6F6F8] p-1 ${className}`}>
@@ -58,8 +58,7 @@ export function FlowSection() {
       </header>
       <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,876fr)_minmax(300px,456fr)] lg:gap-[60px]">
         <StageCard {...flow} />
-        {/* the toggle lines up with the tab bar at the top of the stage */}
-        <div className="flex flex-col gap-8 md:pt-4">
+        <div className="flex flex-col gap-8">
           <ArchToggle arch={arch} onArch={switchArch} />
           <div className="flex-1">
             <FlowTabs scene={flow.scene} onScene={flow.pickScene} progress={progress} autoplay arch={arch} />

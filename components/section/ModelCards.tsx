@@ -6,11 +6,11 @@ import { HARNESS_PARTS, harnessActivity } from "@/lib/stage/directions/harness";
 import { SCENES, type Arch, type SceneId } from "@/lib/stage/types";
 import { CARDS, HARNESS_COPY, RETRIEVAL_DETAIL, S2S_CORE, S2S_TELL1_NOTE, S2S_UNCONFIRMED, TELL1_CTA, TELL1_EVAL_URL, type CardCopy } from "./copy";
 
-// the stage as drawn: 876 × 678, the orb in the middle; the card sits left of it, clear of the orb, top at 209 as before
+// the stage as drawn: 876 × 678, the orb in the middle; the card sits in the top-left corner, 24px in
 const W = 876;
 const H = 678;
-const COL_LEFT = 32;
-const COL_TOP = 209;
+const COL_LEFT = 24;
+const COL_TOP = 24;
 const COL_W = 268;
 
 /** a card icon, drawn as a mask so it takes the text colour */

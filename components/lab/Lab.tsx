@@ -10,7 +10,6 @@ import { getOrbStyle, StylePicker, useOrbStyle } from "../StylePicker";
 import { FlowTabs } from "./FlowTabs";
 import { Panel } from "./Panel";
 import { ModelCards } from "../section/ModelCards";
-import { SceneTabs } from "../section/SceneTabs";
 import { DownloadIcon, PauseIcon, PlayIcon, SlidersIcon } from "./icons";
 
 const KEY = "retell-stage:v6";
@@ -388,9 +387,6 @@ export function Lab() {
               <div className="relative aspect-[876/678] overflow-hidden rounded-[24px]" style={{ background: stage?.config.background ?? "#F5F5F8" }}>
                 <div ref={box} className="absolute inset-0" />
                 <ModelCards scene={scene} arch="cascaded" stage={stage} />
-                <div className="absolute inset-x-0 top-4 flex justify-center">
-                  <SceneTabs scene={scene} arch="cascaded" onScene={pickScene} />
-                </div>
                 <div className="pointer-events-none absolute bottom-4 left-5 flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink/40">
                   <span>{DIRECTIONS[direction].name}</span>
                   <span>·</span>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { SCENES, STEPS, stepScenes, type Arch, type SceneId } from "@/lib/stage/types";
+import { sceneLabel, SCENES, STEPS, stepScenes, type Arch, type SceneId } from "@/lib/stage/types";
 import { StepIcon } from "./icons";
 
 interface Props {
@@ -27,37 +27,32 @@ export function ResponseNote({ className = "" }: { className?: string }) {
   );
 }
 
-/**
- * The three capability groups. The open one shows its description; the line under it fills as the
- * group's models play. Picking a model inside a group happens in the tab bar on the stage.
- */
+/** The three capability groups. The open one shows its description and its models; the line beside the playing model fills as it plays. */
 export function FlowTabs({ scene, onScene, progress, autoplay, arch = "cascaded", note = true }: Props) {
   const active = SCENES[scene].step;
   const bar = useRef<HTMLSpanElement>(null);
-  const ids = stepScenes(active, arch);
-  const index = Math.max(0, ids.indexOf(scene));
 
   useEffect(() => {
     let raf = 0;
     const tick = () => {
-      // across the whole group: each model is an equal share of the line
-      if (bar.current) bar.current.style.transform = `scaleX(${((index + progress()) / ids.length).toFixed(4)})`;
+      if (bar.current) bar.current.style.transform = `scaleY(${progress().toFixed(4)})`;
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [progress, index, ids.length]);
+  }, [progress, scene]);
 
   return (
     <div className="flex h-full flex-col">
       <div>
         {STEPS.map((s, i) => {
           const open = s.id === active;
+          const ids = stepScenes(s.id, arch);
           return (
-            <div key={s.id} className="relative">
+            <div key={s.id} className={i > 0 ? "border-t border-line" : ""}>
               <button
                 type="button"
-                onClick={() => onScene(stepScenes(s.id, arch)[0])}
+                onClick={() => onScene(ids[0])}
                 disabled={open}
                 className={`group flex w-full items-center gap-4 pb-4 text-left md:pb-5 ${open ? "cursor-default" : "cursor-pointer"} ${i > 0 ? "pt-5 md:pt-7" : ""}`}
                 aria-expanded={open}
@@ -73,15 +68,33 @@ export function FlowTabs({ scene, onScene, progress, autoplay, arch = "cascaded"
               </button>
               <div className={`grid transition-[grid-template-rows] duration-500 ease-[cubic-bezier(.2,.7,.2,1)] ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
                 <div className="overflow-hidden" inert={!open}>
-                  <p className="max-w-[440px] pb-6 text-[14px] leading-[19px] tracking-[-0.01em] text-black/50 md:pb-8">{s.blurb}</p>
+                  <p className="max-w-[440px] pb-3 text-[14px] leading-[19px] tracking-[-0.01em] text-black/50 md:pb-4">{s.blurb}</p>
+                  {/* the group's models: picking one plays its scene; the line beside it fills as it plays */}
+                  <ul className="pb-3 md:pb-[17px]">
+                    {ids.map((id) => {
+                      const on = id === scene;
+                      return (
+                        <li key={id}>
+                          <button
+                            type="button"
+                            onClick={() => onScene(id)}
+                            disabled={on}
+                            aria-current={on ? "step" : undefined}
+                            className={`relative flex w-full ${on ? "cursor-default" : "cursor-pointer"} items-baseline gap-3 py-1.5 pl-4 text-left text-[14px] leading-[19px] tracking-[-0.01em] transition-colors md:py-2 ${on ? "text-black" : "text-black/50 hover:text-black"}`}
+                          >
+                            <span className="absolute bottom-1.5 left-0 top-1.5 w-[2px] overflow-hidden rounded bg-line md:bottom-2 md:top-2">
+                              {on && <span ref={bar} className="absolute inset-0 origin-top bg-accent" style={{ transform: "scaleY(0)", opacity: autoplay ? 1 : 0.45 }} />}
+                            </span>
+                            <span className="whitespace-nowrap">{sceneLabel(id, arch).tab}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
               </div>
-              {/* the divider; under the open group it is the progress line */}
-              {i < STEPS.length - 1 || open ? (
-                <span className="relative block h-px overflow-hidden bg-line">
-                  {open && <span ref={bar} className="absolute inset-0 origin-left bg-accent" style={{ transform: "scaleX(0)", opacity: autoplay ? 1 : 0.45 }} />}
-                </span>
-              ) : null}
+              {/* with the blurb shut, the icon sits 28px above the divider */}
+              <div className="h-2" />
             </div>
           );
         })}

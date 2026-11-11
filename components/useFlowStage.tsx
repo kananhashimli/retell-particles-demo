@@ -5,7 +5,6 @@ import { Stage } from "@/lib/stage/stage";
 import { defaultsFor } from "@/lib/stage/defaults";
 import { orderFor, type Arch, type SceneId } from "@/lib/stage/types";
 import { ModelCards } from "./section/ModelCards";
-import { SceneTabs } from "./section/SceneTabs";
 import { getOrbStyle, useOrbStyle } from "./StylePicker";
 
 const CONFIG = defaultsFor("particles");
@@ -108,20 +107,14 @@ interface StageCardProps {
 }
 
 /**
- * The rounded stage card: the canvas (in `box`), the model tabs along its top and the model cards over
- * it. On phones the cards drop below the card instead. Takes useFlowStage's result.
+ * The rounded stage card: the canvas (in `box`) with the open model's card over it. On phones the cards drop below the card instead. Takes useFlowStage's result.
  */
-export function StageCard({ box, scene, stage, mobile, ready, arch, pickScene, style }: StageCardProps) {
+export function StageCard({ box, scene, stage, mobile, ready, arch, style }: StageCardProps) {
   return (
     <div className="flex min-w-0 flex-col gap-6">
       <div className="relative aspect-square overflow-hidden rounded-[32px] md:aspect-[876/678]" style={{ background: CONFIG.background, ...style }}>
         <div ref={box} className="absolute inset-0" />
         {!mobile && <ModelCards scene={scene} arch={arch} stage={stage} show={ready} />}
-        <div className={`absolute inset-x-0 top-3 flex justify-center px-3 transition-opacity duration-700 md:top-4 ${ready ? "opacity-100" : "opacity-0"}`}>
-          <div className="max-w-full overflow-x-auto [scrollbar-width:none]">
-            <SceneTabs scene={scene} arch={arch} onScene={pickScene} />
-          </div>
-        </div>
       </div>
       {mobile && <ModelCards scene={scene} arch={arch} stage={stage} show={ready} mobile />}
     </div>
