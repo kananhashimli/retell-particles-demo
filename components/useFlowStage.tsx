@@ -25,10 +25,8 @@ export const useMedia = (query: string) =>
 const MOBILE = "(max-width: 767px)";
 export const useMobile = () => useMedia(MOBILE);
 
-/** On the square card the scene is framed closer, and higher. */
-/** On desktop the scene sits right of centre, leaving the left of the stage to the model cards. */
-const cameraFor = (mobile: boolean) =>
-  mobile ? { ...CONFIG.camera, zoom: CONFIG.camera.zoom * 1.04, panY: 0.75 } : { ...CONFIG.camera, panX: CONFIG.camera.panX + 0.75, panY: CONFIG.camera.panY - 0.1 };
+/** On the square card the scene is framed closer, and higher, clear of the card at the bottom. */
+const cameraFor = (mobile: boolean) => (mobile ? { ...CONFIG.camera, zoom: CONFIG.camera.zoom * 1.04, panY: 0.75 } : CONFIG.camera);
 
 /**
  * The particle stage and its scene. With `autoplay` it cycles through the scenes on its own;

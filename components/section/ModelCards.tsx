@@ -6,13 +6,12 @@ import { HARNESS_PARTS, harnessActivity } from "@/lib/stage/directions/harness";
 import { SCENES, type Arch, type SceneId } from "@/lib/stage/types";
 import { CARDS, HARNESS_COPY, RETRIEVAL_DETAIL, S2S_CORE, S2S_TELL1_NOTE, S2S_UNCONFIRMED, TELL1_CTA, TELL1_EVAL_URL, type CardCopy } from "./copy";
 
-// the stage as drawn: 876 × 678; the card sits left of the orb, below the tab bar, centred in the space left
+// the stage as drawn: 876 × 678, the orb in the middle; the card floats beside it, top at 209 as before
 const W = 876;
 const H = 678;
-const COL_LEFT = 24;
-const COL_TOP = 80;
-const COL_BOTTOM = 24;
-const COL_W = 340;
+const COL_LEFT = 120;
+const COL_TOP = 209;
+const COL_W = 262;
 
 /** a card icon, drawn as a mask so it takes the text colour */
 const Icon = ({ name, className = "" }: { name: string; className?: string }) => (
@@ -78,7 +77,7 @@ export function ModelCards({ scene, arch, stage, mobile = false, show = true }: 
         className={`absolute left-0 top-0 origin-top-left transition-opacity duration-700 ${show ? "opacity-100" : "opacity-0"}`}
         style={{ width: W, height: H, transform: `scale(${scale})` }}
       >
-        <div className="pointer-events-auto absolute flex flex-col justify-center" style={{ left: COL_LEFT, top: COL_TOP, bottom: COL_BOTTOM, width: COL_W }}>
+        <div className="scene-cards-float pointer-events-auto absolute" style={{ left: COL_LEFT, top: COL_TOP, width: COL_W }}>
           {card}
         </div>
       </div>
@@ -92,7 +91,7 @@ function SceneCard({ scene, arch, reg }: { scene: SceneId; arch: Arch; reg: (key
   if (scene === "harness") return <Harness reg={reg} />;
   if (scene === "llm") {
     return (
-      <Card copy={s2s ? S2S_CORE : CARDS.llm!} big>
+      <Card copy={s2s ? S2S_CORE : CARDS.llm!}>
         {s2s ? (
           <p className="mt-2 text-[12px] leading-[16px] text-black/40">{S2S_TELL1_NOTE}</p>
         ) : (
@@ -117,17 +116,17 @@ function SceneCard({ scene, arch, reg }: { scene: SceneId; arch: Arch; reg: (key
 }
 
 /** A model card. */
-function Card({ copy, unconfirmed = false, big = false, children }: { copy: CardCopy; unconfirmed?: boolean; big?: boolean; children?: ReactNode }) {
+function Card({ copy, unconfirmed = false, children }: { copy: CardCopy; unconfirmed?: boolean; children?: ReactNode }) {
   return (
     <div
       className={`rounded-[20px] text-[14px] leading-[19px] tracking-[-0.01em] ${
         unconfirmed ? "border border-dashed border-black/20 bg-[#F6F6F8]/85 text-black/55 backdrop-blur-[6px]" : `bg-white text-black ${SHADOW}`
-      } ${big ? "p-5" : "px-4 py-4"}`}
+      } px-4 py-4`}
     >
       <div className="flex gap-3">
         <Icon name={copy.icon} className={`mt-[1px] ${unconfirmed ? "text-black/45" : "text-accent"}`} />
         <div className="min-w-0 flex-1">
-          <p className={big ? "text-[17px] leading-[22px]" : ""}>{copy.title}</p>
+          <p>{copy.title}</p>
           <p className="mt-1 text-[13px] leading-[18px] text-black/50">{copy.text}</p>
           {unconfirmed && <p className="mt-2 inline-block rounded-full border border-black/15 px-2 py-0.5 text-[11px] leading-[14px] text-black/50">{S2S_UNCONFIRMED}</p>}
           {children}
@@ -137,26 +136,14 @@ function Card({ copy, unconfirmed = false, big = false, children }: { copy: Card
   );
 }
 
-/** The harness: a container, visibly not a model card, with its three components inside. */
+/** The harness: the same card, with its three components listed inside; each lights while it is called. */
 function Harness({ reg }: { reg: (key: string) => (el: HTMLElement | null) => void }) {
   return (
-    <div className="rounded-[22px] border border-dashed border-accent/45 bg-[#EEF2FD]/85 p-2 backdrop-blur-[6px]">
-      <div className="flex gap-3 px-2 pb-2.5 pt-2 text-[14px] leading-[19px] tracking-[-0.01em]">
-        <Icon name="harness" className="mt-[1px] text-accent" />
-        <div className="min-w-0 flex-1">
-          <p>{CARDS.harness!.title}</p>
-          <p className="mt-1 text-[13px] leading-[18px] text-black/50">{CARDS.harness!.text}</p>
-        </div>
-      </div>
-      <div className="flex flex-col gap-1">
+    <Card copy={CARDS.harness!}>
+      <div className="mt-3 flex flex-col gap-2.5 border-t border-line pt-3">
         {HARNESS_PARTS.map((p) => (
-          <div
-            key={p}
-            ref={reg(p)}
-            className="flex gap-2.5 rounded-[14px] bg-white px-3 py-2 text-[13px] leading-[17px] tracking-[-0.01em]"
-            style={{ "--act": 0, boxShadow: "0 0 0 calc(0.5px + var(--act) * 0.5px) color-mix(in srgb, var(--accent) calc(var(--act) * 60%), rgba(0,0,0,0.1))" } as CSSProperties}
-          >
-            <span className="relative mt-[5px] size-[7px] shrink-0 rounded-full bg-black/20">
+          <div key={p} ref={reg(p)} className="flex gap-2.5 text-[13px] leading-[17px] tracking-[-0.01em]" style={{ "--act": 0 } as CSSProperties}>
+            <span className="relative mt-[5px] size-[7px] shrink-0 rounded-full bg-black/15">
               <span className="absolute inset-0 rounded-full bg-accent" style={{ opacity: "var(--act)", transform: "scale(calc(1 + var(--act) * 0.3))" }} />
             </span>
             <div className="min-w-0">
@@ -170,6 +157,6 @@ function Harness({ reg }: { reg: (key: string) => (el: HTMLElement | null) => vo
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }
