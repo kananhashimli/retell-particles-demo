@@ -6,7 +6,7 @@ import { defaultsFor } from "@/lib/stage/defaults";
 import { orderFor, type Arch, type SceneId } from "@/lib/stage/types";
 import { ModelCards } from "./section/ModelCards";
 import { SceneTabs } from "./section/SceneTabs";
-import { getOrbStyle, StylePicker, useOrbStyle } from "./StylePicker";
+import { getOrbStyle, useOrbStyle } from "./StylePicker";
 
 const CONFIG = defaultsFor("particles");
 
@@ -122,7 +122,6 @@ export function StageCard({ box, scene, stage, mobile, ready, arch, pickScene, s
             <SceneTabs scene={scene} arch={arch} onScene={pickScene} />
           </div>
         </div>
-        <StylePicker className="absolute bottom-4 right-4" />
       </div>
       {mobile && <ModelCards scene={scene} arch={arch} stage={stage} show={ready} mobile />}
     </div>

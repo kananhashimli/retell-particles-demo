@@ -718,8 +718,8 @@ const voices: SceneDef = {
 };
 
 // ------------------------------------------------------------------ Speech perception · Voicemail & IVR detection
-// One ring is the line, read like an oscilloscope bent round the orb: the newest audio enters at the
-// playhead and the whole loop sits on the ring, older parts dimmer. Two kinds of machine audio come in —
+// One ring is the line, read like an oscilloscope bent round the orb: the newest audio enters at one
+// point and the whole loop sits on the ring, older parts dimmer. Two kinds of machine audio come in —
 // an automated menu (rigidly regular pulses) and a voicemail greeting ending in its beep. Once enough
 // of each has been heard the model recognises it: that stretch of the ring turns blue and a ring of
 // light leaves the orb. Everything else (silence, line hiss) stays grey.
@@ -733,7 +733,6 @@ const IVR_P = {
   litOpacity: { value: 1, min: 0, max: 1, step: 0.01, label: "recognised opacity" },
   hiss: { value: 0.05, min: 0, max: 0.3, step: 0.005, label: "line hiss" },
   ripple: { value: 0.8, min: 0, max: 2, step: 0.01, label: "detect ripple" },
-  playheadOpacity: { value: 0.45, min: 0, max: 1, step: 0.01, label: "playhead opacity" },
   ...LOOK,
 } satisfies ParamDefs;
 
@@ -775,18 +774,15 @@ const ivr: SceneDef = {
   orb: "listening",
   params: IVR_P,
   create(ctx) {
-    const { kit, group, look } = ctx;
+    const { kit, group } = ctx;
     const R = ctx.orbRadius;
     const D = 10;
     const N = Math.max(400, Math.round(1500 * ctx.particles.density));
     const dots = kit.particles(N);
     group.add(dots);
     const grains = Array.from({ length: N }, (_, i) => grain(i));
-    const head = kit.line(2, { width: 1.3, color: look.ink, opacity: 0.45 });
-    group.add(head);
     const sig = { v: 0, seg: -1, tone: 0 };
     const off = [0, 0];
-    const at = (rr: number, a: number) => new THREE.Vector3(Math.cos(a) * rr, 0.015, Math.sin(a) * rr);
 
     return {
       update({ t, age, presence }) {
@@ -824,8 +820,6 @@ const ivr: SceneDef = {
           dots.set(i, Math.cos(a) * (r + off[0]), y, Math.sin(a) * (r + off[0]), L.size * lerp(1, L.emphasis, lit * sig.v) * g.s, col, op);
         }
         dots.commit();
-        head.setPoints([at(r - 0.3, a0), at(r + 0.3, a0)]);
-        head.opacity = P.playheadOpacity * presence;
         // a ring of light leaves the orb as each kind is recognised
         for (const s of IVR_SEGS) {
           const x = t - s.detect;

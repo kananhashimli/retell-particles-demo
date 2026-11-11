@@ -14,7 +14,7 @@ const ARCHS: { id: Arch; label: string }[] = [
 /** Cascaded / speech-to-speech: the brief's two variants of the same layout. Same size and look as the stage's tab bar. */
 function ArchToggle({ arch, onArch, className = "" }: { arch: Arch; onArch: (a: Arch) => void; className?: string }) {
   return (
-    <div role="group" aria-label="Agent architecture" className={`flex w-max items-center rounded-full bg-[#E9E9EE] p-1 ${className}`}>
+    <div role="group" aria-label="Agent architecture" className={`flex w-full items-center rounded-full bg-[#F6F6F8] p-1 ${className}`}>
       {ARCHS.map((a) => {
         const on = a.id === arch;
         return (
@@ -23,7 +23,7 @@ function ArchToggle({ arch, onArch, className = "" }: { arch: Arch; onArch: (a: 
             type="button"
             onClick={() => onArch(a.id)}
             aria-pressed={on}
-            className={`cursor-pointer whitespace-nowrap rounded-full px-4 py-2 text-[14px] leading-[19px] tracking-[-0.01em] transition-all duration-300 md:px-5 md:py-[9px] md:text-[15px] ${
+            className={`flex-1 cursor-pointer whitespace-nowrap rounded-full px-4 py-2 text-[14px] leading-[19px] tracking-[-0.01em] transition-all duration-300 md:px-5 md:py-[9px] md:text-[15px] ${
               on ? "bg-white text-black shadow-[0_1px_3px_rgba(0,0,0,0.08),0_0_0_0.5px_rgba(0,0,0,0.06)]" : "text-black/55 hover:text-black"
             }`}
           >
