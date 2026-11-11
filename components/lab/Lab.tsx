@@ -5,11 +5,12 @@ import { Stage, download } from "@/lib/stage/stage";
 import { DIRECTIONS, DIRECTION_ORDER } from "@/lib/stage/directions";
 import { mergeConfig } from "@/lib/stage/config";
 import { defaultsFor } from "@/lib/stage/defaults";
-import { SCENE_ORDER, SCENES, type DirectionId, type SceneId, type StageConfig } from "@/lib/stage/types";
+import { ALL_SCENES, SCENE_ORDER, SCENES, type DirectionId, type SceneId, type StageConfig } from "@/lib/stage/types";
 import { getOrbStyle, StylePicker, useOrbStyle } from "../StylePicker";
 import { FlowTabs } from "./FlowTabs";
 import { Panel } from "./Panel";
-import { SceneCards } from "./SceneCards";
+import { ModelCards } from "../section/ModelCards";
+import { SceneTabs } from "../section/SceneTabs";
 import { DownloadIcon, PauseIcon, PlayIcon, SlidersIcon } from "./icons";
 
 const KEY = "retell-stage:v6";
@@ -141,7 +142,7 @@ export function Lab() {
       if (e.key === " ") {
         e.preventDefault();
         togglePlay();
-      } else if (/^[1-6]$/.test(e.key)) pickScene(SCENE_ORDER[+e.key - 1]);
+      } else if (/^[1-9]$/.test(e.key)) pickScene(ALL_SCENES[+e.key - 1]);
       else if (e.key === "p") setPanel((v) => !v);
       else if (e.key === "l") pickDirection("line");
       else if (e.key === "k") pickDirection("particles");
@@ -379,14 +380,17 @@ export function Lab() {
         {/* the section, as designed */}
         <main className="min-w-0 flex-1">
           <section className="mx-auto max-w-[1512px] px-6 pb-24 pt-[72px] md:px-[60px]">
-            <p className="text-[15px] text-muted">Retell vCX Conversational Dynamics</p>
-            <h2 className="mt-8 max-w-[680px] font-serif text-[clamp(44px,5.6vw,72px)] leading-[0.98] tracking-[-0.02em]">The most powerful agent for the contact center</h2>
-            <p className="mt-6 max-w-[350px] text-[15px] leading-[1.4]">Six purpose-built Retell models handle the listening, thinking, and speaking on every call.</p>
+            <p className="text-[15px] text-muted">Retell vCX Agent Harness</p>
+            <h2 className="mt-8 max-w-[680px] font-serif text-[clamp(44px,5.6vw,72px)] leading-[0.98] tracking-[-0.02em]">Purpose-built intelligence behind every conversation.</h2>
+            <p className="mt-6 max-w-[460px] text-[15px] leading-[1.4]">Retell brings together specialized models for turn-taking, context retrieval, reasoning, and response control. One coordinated agent harness, engineered for the demands of real-time conversation.</p>
 
             <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,876fr)_minmax(300px,456fr)] lg:gap-[60px]">
               <div className="relative aspect-[876/678] overflow-hidden rounded-[24px]" style={{ background: stage?.config.background ?? "#F5F5F8" }}>
                 <div ref={box} className="absolute inset-0" />
-                <SceneCards scene={scene} stage={stage} />
+                <ModelCards scene={scene} arch="cascaded" stage={stage} onScene={pickScene} />
+                <div className="absolute inset-x-0 top-4 flex justify-center">
+                  <SceneTabs scene={scene} arch="cascaded" onScene={pickScene} />
+                </div>
                 <div className="pointer-events-none absolute bottom-4 left-5 flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink/40">
                   <span>{DIRECTIONS[direction].name}</span>
                   <span>·</span>
@@ -407,7 +411,7 @@ export function Lab() {
             </div>
             {stage && <Panel stage={stage} scene={scene} version={version} onChange={persist} onResetLook={resetLook} />}
             <p className="px-1 pt-4 text-[11.5px] leading-[1.5] text-muted">
-              Keys: <b className="font-medium text-ink">Space</b> play · <b className="font-medium text-ink">1–6</b> scenes · <b className="font-medium text-ink">L / K</b> Line / Particles · <b className="font-medium text-ink">P</b> panel. Changes stay in this browser until you use <b className="font-medium text-ink">Save</b> to make them the defaults for the homepage.
+              Keys: <b className="font-medium text-ink">Space</b> play · <b className="font-medium text-ink">1–9</b> scenes · <b className="font-medium text-ink">L / K</b> Line / Particles · <b className="font-medium text-ink">P</b> panel. Changes stay in this browser until you use <b className="font-medium text-ink">Save</b> to make them the defaults for the homepage.
             </p>
           </div>
         </aside>

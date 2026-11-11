@@ -315,6 +315,12 @@ export class Stage {
     return c ? Math.max(0, c.age % c.def.duration) / c.def.duration : 0;
   }
 
+  /** a world point in css px from the stage's top-left: for laying HTML (cards, connectors) over it */
+  project(x: number, y: number, z: number) {
+    const v = new THREE.Vector3(x, y, z).project(this.camera);
+    return { x: ((v.x + 1) / 2) * this.w, y: ((1 - v.y) / 2) * this.h };
+  }
+
   // ------------------------------------------------------------------ frame
   private loop = (now: number) => {
     this.raf = requestAnimationFrame(this.loop);

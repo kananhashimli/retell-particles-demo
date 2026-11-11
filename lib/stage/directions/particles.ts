@@ -6,7 +6,8 @@
 import * as THREE from "three";
 import type { Direction, ParamDefs, ParamValues, ParticleLook, SceneContext, SceneDef } from "../types";
 import { easeInOut, easeOut, hash, lerp, rng, shiftHue, smooth, speech, TAU, win } from "../util";
-import { TURN_DURATION, TURNS, voiceAt, VOICES } from "./shared";
+import { screenAxes, TURN_DURATION, TURNS, voiceAt, VOICES } from "./shared";
+import { COMET_TIME, HARNESS_DURATION, HARNESS_EVENTS, HARNESS_PARTS, harnessActivity, type HarnessPart } from "./harness";
 
 type RGB = readonly number[];
 /**
@@ -716,6 +717,334 @@ const voices: SceneDef = {
   },
 };
 
+// ------------------------------------------------------------------ Speech perception · Voicemail & IVR detection
+// One ring is the line, read like an oscilloscope bent round the orb: the newest audio enters at the
+// playhead and the whole loop sits on the ring, older parts dimmer. Two kinds of machine audio come in —
+// an automated menu (rigidly regular pulses) and a voicemail greeting ending in its beep. Once enough
+// of each has been heard the model recognises it: that stretch of the ring turns blue and a ring of
+// light leaves the orb. Everything else (silence, line hiss) stays grey.
+const IVR_P = {
+  rotation: { value: 0, min: -180, max: 180, step: 1, label: "rotation °" },
+  radius: { value: 1.95, min: 1.2, max: 3.5, step: 0.01, label: "radius ×orb" },
+  height: { value: 0.24, min: 0, max: 0.8, step: 0.005, label: "wave height" },
+  cycles: { value: 72, min: 8, max: 200, step: 1, label: "wave cycles" },
+  previous: { value: 0.3, min: 0, max: 1, step: 0.01, label: "older audio" },
+  opacity: { value: 0.45, min: 0, max: 1, step: 0.01, label: "unrecognised opacity" },
+  litOpacity: { value: 1, min: 0, max: 1, step: 0.01, label: "recognised opacity" },
+  hiss: { value: 0.05, min: 0, max: 0.3, step: 0.005, label: "line hiss" },
+  ripple: { value: 0.8, min: 0, max: 2, step: 0.01, label: "detect ripple" },
+  playheadOpacity: { value: 0.45, min: 0, max: 1, step: 0.01, label: "playhead opacity" },
+  ...LOOK,
+} satisfies ParamDefs;
+
+/** the machine audio in one loop, and when each is recognised */
+const IVR_SEGS = [
+  { kind: "menu" as const, a: 0.5, b: 4.1, detect: 2.1 },
+  { kind: "voicemail" as const, a: 5.0, b: 8.5, detect: 8.05 },
+];
+/** level of the line at loop time x (0..1), and which segment it belongs to (-1: none) */
+function ivrSignal(x: number, out: { v: number; seg: number; tone: number }) {
+  out.v = 0;
+  out.seg = -1;
+  out.tone = 0;
+  for (let s = 0; s < IVR_SEGS.length; s++) {
+    const g = IVR_SEGS[s];
+    if (x < g.a || x > g.b) continue;
+    out.seg = s;
+    const u = x - g.a;
+    const edge = Math.min(1, u / 0.05, (g.b - x) / 0.05);
+    if (g.kind === "menu") {
+      // a recorded prompt: identical bursts on a fixed clock, flat-topped, the same height every time
+      const f = (u % 0.42) / 0.3;
+      out.v = f > 1 ? 0 : 0.78 * Math.min(1, Math.sin(Math.PI * f) * 2.4) * edge;
+    } else if (x < 7.6) {
+      // the greeting: even, read-out speech
+      out.v = (0.35 + 0.35 * speech(u, 9)) * edge;
+    } else if (x > 7.85) {
+      // the beep: one pure tone
+      out.v = 0.95 * edge;
+      out.tone = 1;
+    }
+    return out;
+  }
+  return out;
+}
+
+const ivr: SceneDef = {
+  duration: 10,
+  orb: "listening",
+  params: IVR_P,
+  create(ctx) {
+    const { kit, group, look } = ctx;
+    const R = ctx.orbRadius;
+    const D = 10;
+    const N = Math.max(400, Math.round(1500 * ctx.particles.density));
+    const dots = kit.particles(N);
+    group.add(dots);
+    const grains = Array.from({ length: N }, (_, i) => grain(i));
+    const head = kit.line(2, { width: 1.3, color: look.ink, opacity: 0.45 });
+    group.add(head);
+    const sig = { v: 0, seg: -1, tone: 0 };
+    const off = [0, 0];
+    const at = (rr: number, a: number) => new THREE.Vector3(Math.cos(a) * rr, 0.015, Math.sin(a) * rr);
+
+    return {
+      update({ t, age, presence }) {
+        const C = palette(ctx);
+        const P = params<typeof IVR_P>(ctx);
+        const L = ctx.particles;
+        const r = P.radius * R;
+        const a0 = Math.PI * 0.75 + THREE.MathUtils.degToRad(P.rotation);
+        const first = age < D;
+        const cyc = Math.round(P.cycles);
+        for (let i = 0; i < N; i++) {
+          // dot i shows the audio from u·D seconds ago: the ring holds exactly one loop
+          const u = i / N;
+          const back = u * D;
+          const abs = t - back;
+          if (first && abs < 0) {
+            dots.color[i * 4 + 3] = 0;
+            continue;
+          }
+          const x = ((abs % D) + D) % D;
+          ivrSignal(x, sig);
+          // recognised once the playhead has passed this segment's detection point
+          const seg = sig.seg >= 0 ? IVR_SEGS[sig.seg] : null;
+          const detectedAt = seg ? abs - x + seg.detect : Infinity;
+          const lit = seg && t >= detectedAt ? easeOut((t - detectedAt) / 0.35) : 0;
+          const fresh = 1 - (1 - P.previous) * u;
+          const g = grains[i];
+          wiggle(L, g, t, D, off);
+          const a = a0 - u * TAU;
+          const hiss = P.hiss * (hash(i * 1.37 + Math.floor(t * 14)) - 0.5);
+          const k = sig.tone ? 3 : 1;
+          const y = 0.015 + off[1] + (sig.v * P.height * Math.sin((cyc / k) * u * TAU) + (sig.v ? 0 : hiss));
+          const col = mix3(C.ink, mix3(C.accent, C.high, sig.tone * 0.5), lit);
+          const op = lerp(P.opacity * (sig.v ? 1 : 0.7), P.litOpacity, lit) * fresh * presence;
+          dots.set(i, Math.cos(a) * (r + off[0]), y, Math.sin(a) * (r + off[0]), L.size * lerp(1, L.emphasis, lit * sig.v) * g.s, col, op);
+        }
+        dots.commit();
+        head.setPoints([at(r - 0.3, a0), at(r + 0.3, a0)]);
+        head.opacity = P.playheadOpacity * presence;
+        // a ring of light leaves the orb as each kind is recognised
+        for (const s of IVR_SEGS) {
+          const x = t - s.detect;
+          if (x < 0 || x > 1.6) continue;
+          ctx.floor.ripple({ radius: R * 1.1 + x * 2.2, strength: P.ripple * (1 - x / 1.6), width: 0.35, kind: 1 });
+        }
+        ivrSignal(t, sig);
+        ctx.orb.listen = sig.v;
+        ctx.orb.speak = 0;
+      },
+    };
+  },
+};
+
+// ------------------------------------------------------------------ Reasoning · Retell Agent Harness (system layer)
+// A slow ring of dots round the orb is the harness: the layer around the model. Three nodes sit on it —
+// query refinement, knowledge retrieval, flow transition. They are called when the conversation needs
+// them (see harness.ts), not in a fixed order on every turn: a comet runs between the orb and the node,
+// the node lights and a ring opens under it, then it settles back to grey.
+const HARNESS_P = {
+  radius: { value: 2.1, min: 1.4, max: 3.5, step: 0.01, label: "harness radius ×orb", rebuild: true },
+  ringSpeed: { value: 0.2, min: 0, max: 2, step: 0.01, label: "ring speed" },
+  opacity: { value: 0.3, min: 0, max: 1, step: 0.01, label: "ring opacity" },
+  nodeSize: { value: 0.3, min: 0.1, max: 0.8, step: 0.01, label: "node radius", rebuild: true },
+  nodeOpacity: { value: 0.55, min: 0, max: 1, step: 0.01, label: "idle node opacity" },
+  arc: { value: 0.45, min: 0, max: 1.5, step: 0.01, label: "comet arc height" },
+  comet: { value: 0.32, min: 0.05, max: 1, step: 0.01, label: "comet length" },
+  ripple: { value: 0.7, min: 0, max: 2, step: 0.01, label: "node ripple" },
+  ...LOOK,
+} satisfies ParamDefs;
+/** where each node sits, in screen terms: degrees from screen-right toward the viewer */
+const NODE_ANGLES: Record<HarnessPart, number> = { query: -112, retrieval: -28, flow: 58 };
+
+const harness: SceneDef = {
+  duration: HARNESS_DURATION,
+  orb: "thinking",
+  params: HARNESS_P,
+  create(ctx) {
+    const { kit, group } = ctx;
+    const R = ctx.orbRadius;
+    const D = HARNESS_DURATION;
+    const P0 = params<typeof HARNESS_P>(ctx);
+    const rH = R * P0.radius;
+    const nRing = ringCount(ctx, rH);
+    const ring = Array.from({ length: nRing }, (_, j) => ({ a: (j / nRing) * TAU, g: grain(j) }));
+    const ax = screenAxes(ctx.camera);
+    const nodes = HARNESS_PARTS.map((part, k) => {
+      const th = THREE.MathUtils.degToRad(NODE_ANGLES[part]);
+      const dir = ax.floorRight.clone().multiplyScalar(Math.cos(th)).addScaledVector(ax.floorFront, Math.sin(th)).normalize();
+      const n = Math.max(18, Math.round(TAU * P0.nodeSize * DOTS_PER_UNIT * 1.4 * ctx.particles.density));
+      return { part, dir, n, g: Array.from({ length: n }, (_, j) => grain(5000 + k * 200 + j)) };
+    });
+    const CN = 34;
+    const total = nRing + nodes.reduce((s, n) => s + n.n + 1, 0) + CN * HARNESS_PARTS.length;
+    const field = kit.particles(total);
+    group.add(field);
+    const off = [0, 0];
+
+    return {
+      update({ t, age, presence }) {
+        const C = palette(ctx);
+        const P = params<typeof HARNESS_P>(ctx);
+        const L = ctx.particles;
+        let i = 0;
+        // the harness ring, drifting a whole number of dot gaps per loop
+        const steps = ringSteps(P.ringSpeed, rH, nRing, D);
+        const turn = (steps * (TAU / nRing) * t) / D;
+        const loop = Math.round((age - t) / D);
+        const act = HARNESS_PARTS.map((p) => harnessActivity(p, t));
+        for (let j = 0; j < nRing; j++) {
+          const g = ring[ringSlot(0, nRing, j, steps, loop)].g;
+          wiggle(L, g, t, D, off);
+          const a = ring[j].a + turn;
+          const x = Math.cos(a), z = Math.sin(a);
+          // the ring brightens a little near a busy node
+          let near = 0;
+          nodes.forEach((nd, k) => (near = Math.max(near, act[k] * Math.pow(Math.max(0, x * nd.dir.x + z * nd.dir.z), 18))));
+          field.set(i++, x * (rH + off[0]), 0.02 + off[1], z * (rH + off[0]), L.size * g.s, mix3(C.ink, C.accent, near), lerp(P.opacity, 0.9, near) * presence);
+        }
+        // nodes: a small ring of dots with a centre dot, lifting and lighting while called
+        nodes.forEach((nd, k) => {
+          const v = act[k];
+          const cx = nd.dir.x * rH, cz = nd.dir.z * rH;
+          const rr = P0.nodeSize * (1 + 0.25 * v);
+          const spin = (TAU * t * (k % 2 ? -1 : 1)) / D;
+          for (let j = 0; j < nd.n; j++) {
+            const g = nd.g[j];
+            wiggle(L, g, t, D, off);
+            const a = (j / nd.n) * TAU + spin;
+            field.set(i++, cx + Math.cos(a) * (rr + off[0] * 0.5), 0.03 + off[1] + v * 0.12, cz + Math.sin(a) * (rr + off[0] * 0.5), L.size * lerp(1, L.emphasis, v) * g.s, mix3(C.ink, mix3(C.accent, C.high, v * 0.4), Math.min(1, 0.15 + v)), lerp(P.nodeOpacity, 1, v) * presence);
+          }
+          field.set(i++, cx, 0.05 + v * 0.12, cz, L.size * lerp(1.6, 2.6, v), mix3(C.ink, C.accent, Math.min(1, 0.25 + v)), lerp(0.7, 1, v) * presence);
+          if (v > 0.01) ctx.floor.ripple({ x: cx, z: cz, radius: rr + 0.15 + (1 - v) * 0.5, strength: P.ripple * v, width: 0.18, kind: 1 });
+        });
+        // comets between the orb and a node, one per component at most
+        HARNESS_PARTS.forEach((part, k) => {
+          const nd = nodes[k];
+          const e = HARNESS_EVENTS.find((ev) => ev.part === part && t >= ev.t && t <= ev.t + COMET_TIME + P.comet);
+          for (let c = 0; c < CN; c++) {
+            if (!e) {
+              field.set(i++, 0, 0, 0, 0, C.ink, 0);
+              continue;
+            }
+            const lag = (c / CN) * P.comet;
+            const s = (t - e.t - lag) / COMET_TIME;
+            if (s < 0 || s > 1) {
+              field.set(i++, 0, 0, 0, 0, C.ink, 0);
+              continue;
+            }
+            const u = e.dir === "out" ? easeInOut(s) : 1 - easeInOut(s);
+            const rad = lerp(R * 1.05, rH - P0.nodeSize, u);
+            const fall = 1 - c / CN;
+            field.set(i++, nd.dir.x * rad, 0.04 + Math.sin(Math.PI * u) * P.arc, nd.dir.z * rad, L.size * lerp(1, L.emphasis * 1.2, fall) * (0.6 + 0.4 * fall), mix3(C.accent, C.high, fall), fall * presence);
+          }
+        });
+        field.commit();
+        ctx.floor.glow(0.15 * Math.max(...act));
+      },
+    };
+  },
+};
+
+// ------------------------------------------------------------------ Response generation · Response guardrails (fence)
+// Replies leave the orb as rings of dots, like Colloquial. A fence of two dashed rings marks the
+// configured constraints. Inside it some crests carry spikes, drawn in grey; at the fence each reply is
+// checked: spikes flash, are brought within bounds, and only clean blue waves carry on outward.
+const GUARD_P = {
+  spacing: { value: 0.15, min: 0.05, max: 0.4, step: 0.005, label: "ring spacing", rebuild: true },
+  inner: { value: 1.2, min: 1, max: 2, step: 0.01, label: "inner radius ×orb", rebuild: true },
+  outer: { value: 3.6, min: 2, max: 5.5, step: 0.05, label: "outer radius", rebuild: true },
+  fence: { value: 2.2, min: 1.4, max: 3.2, step: 0.01, label: "fence radius ×orb" },
+  height: { value: 0.2, min: 0, max: 0.8, step: 0.005, label: "wave height" },
+  spike: { value: 2.2, min: 0, max: 4, step: 0.05, label: "spike ×" },
+  spikeChance: { value: 0.35, min: 0, max: 1, step: 0.01, label: "spike chance" },
+  waves: { value: 5, min: 1, max: 12, step: 1, label: "waves / loop" },
+  wavelength: { value: 0.6, min: 0.15, max: 2, step: 0.01 },
+  opacity: { value: 0.22, min: 0, max: 1, step: 0.01, label: "rest opacity" },
+  crestOpacity: { value: 0.95, min: 0, max: 1, step: 0.01, label: "crest opacity" },
+  fenceOpacity: { value: 0.42, min: 0, max: 1, step: 0.01, label: "fence opacity" },
+  ...LOOK,
+} satisfies ParamDefs;
+
+const guardrails: SceneDef = {
+  duration: 10,
+  orb: "speaking",
+  params: GUARD_P,
+  create(ctx) {
+    const { kit, group, look } = ctx;
+    const R = ctx.orbRadius;
+    const D = 10;
+    const P0 = params<typeof GUARD_P>(ctx);
+    const r0 = R * P0.inner;
+    const pts: { r: number; a: number; ring: number; g: Grain }[] = [];
+    for (let r = r0, ring = 0; r <= P0.outer; r += P0.spacing, ring++) {
+      const n = ringCount(ctx, r);
+      const s = hash(r * 7.7) * TAU;
+      for (let i = 0; i < n; i++) pts.push({ r, a: s + (i / n) * TAU, ring, g: grain(pts.length) });
+    }
+    const N = pts.length;
+    const field = kit.particles(N);
+    group.add(field);
+    const fenceLo = kit.line(240, { width: 1, color: look.ink, opacity: 0.3, dashed: true, dash: 0.05, gap: 0.07 });
+    const fenceHi = kit.line(240, { width: 1, color: look.ink, opacity: 0.3, dashed: true, dash: 0.05, gap: 0.07 });
+    group.add(fenceLo, fenceHi);
+    const fp = new Float32Array(240 * 3);
+    const SECT = 14;
+    const off = [0, 0];
+
+    return {
+      update({ t, presence }) {
+        const C = palette(ctx);
+        const P = params<typeof GUARD_P>(ctx);
+        const L = ctx.particles;
+        const rf = R * P.fence;
+        const waves = Math.round(P.waves);
+        const cap = P.height * 1.05;
+        let check = 0;
+        for (let i = 0; i < N; i++) {
+          const { r: rb, a: a0, ring, g } = pts[i];
+          wiggle(L, g, t, D, off);
+          const r = rb + off[0];
+          const a = a0 + (ring % 2 ? -1 : 1) * ((TAU * t) / D) * 0.25 * (r0 / rb);
+          const phase = (rb - r0) / P.wavelength - (waves * t) / D;
+          const crest = Math.floor(phase);
+          const wave = 0.5 + 0.5 * Math.sin(TAU * phase);
+          const pulse = smooth(0.4, 0.95, wave);
+          // spikes ride some crests in some directions; the same every loop (crest index mod waves)
+          const ci = ((crest % waves) + waves) % waves;
+          const sect = Math.floor((((a % TAU) + TAU) % TAU) / (TAU / SECT));
+          const sa = (((a % TAU) + TAU) % TAU) / (TAU / SECT) - sect;
+          const has = hash(ci * 13.1 + sect * 3.7) < P.spikeChance ? Math.pow(Math.sin(Math.PI * sa), 2) : 0;
+          // inside the fence: unchecked; through it: brought within bounds
+          const past = smooth(rf - 0.05, rf + 0.15, rb);
+          const atFence = Math.exp(-Math.pow((rb - rf) / 0.12, 2));
+          const spike = has * pulse * (1 - past);
+          const flash = has * pulse * atFence;
+          check = Math.max(check, flash);
+          const edge = smooth(0, 0.2, rb - r0) * (1 - smooth(P0.outer - 0.9, P0.outer, rb));
+          const y = 0.02 + off[1] + Math.min(P.height * pulse * (1 + P.spike * spike), past > 0.5 ? cap : Infinity);
+          // unchecked spikes are grey ink; checked waves and the flash are blue
+          const blue = Math.max(pulse * lerp(0.35, 1, past) * (1 - spike), flash);
+          const col = mix3(C.ink, mix3(C.accent, C.high, flash), Math.min(1, blue * 1.4));
+          const op = lerp(P.opacity, P.crestOpacity, Math.max(pulse, flash)) * edge * presence;
+          field.set(i, Math.cos(a) * r, y, Math.sin(a) * r, L.size * lerp(1, L.emphasis, Math.max(pulse * past, flash)) * g.s, col, op);
+        }
+        field.commit();
+        ringPts(fp, 240, rf, 0.015, () => 0);
+        fenceLo.setPoints(fp);
+        ringPts(fp, 240, rf, 0.015 + cap, () => 0);
+        fenceHi.setPoints(fp);
+        fenceLo.opacity = P.fenceOpacity * presence;
+        fenceHi.opacity = P.fenceOpacity * 0.6 * presence;
+        ctx.floor.ripple({ radius: rf, strength: 0.25 * check * presence, width: 0.2, kind: 2 });
+        ctx.orb.speak = 0.4 + 0.5 * speech(t, 4);
+      },
+    };
+  },
+};
+
 export const particles: Direction = {
   id: "particles",
   name: "Particles",
@@ -729,5 +1058,5 @@ export const particles: Direction = {
     camera: { azimuth: 45, elevation: 12, zoom: 1, height: 1.25, panX: 0, panY: 0 },
     particles: { size: 1.5, emphasis: 1.6, density: 1, scatter: 0.025, idle: 0.012, idleSpeed: 3, muted: "#1A1C22", active: "#3E6AEF", highlight: "#3E8CF7" },
   },
-  scenes: { denoise, turns, llm, flow, colloquial, voices },
+  scenes: { denoise, turns, ivr, llm, harness, flow, colloquial, guardrails, voices },
 };

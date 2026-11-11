@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react";
 import { Stage } from "@/lib/stage/stage";
 import { defaultsFor } from "@/lib/stage/defaults";
-import { SCENE_ORDER, type SceneId } from "@/lib/stage/types";
-import { SceneCards } from "./lab/SceneCards";
+import { orderFor, type Arch, type SceneId } from "@/lib/stage/types";
+import { ModelCards } from "./section/ModelCards";
+import { SceneTabs } from "./section/SceneTabs";
 import { getOrbStyle, StylePicker, useOrbStyle } from "./StylePicker";
 
 const CONFIG = defaultsFor("particles");
@@ -24,15 +25,17 @@ export const useMedia = (query: string) =>
 const MOBILE = "(max-width: 767px)";
 export const useMobile = () => useMedia(MOBILE);
 
-/** On the square card the scene is framed closer, and higher, clear of the card at the bottom. */
-const cameraFor = (mobile: boolean) => (mobile ? { ...CONFIG.camera, zoom: CONFIG.camera.zoom * 1.04, panY: 0.75 } : CONFIG.camera);
+/** On the square card the scene is framed closer, and higher. */
+/** On desktop the scene sits right of centre, leaving the left of the stage to the model cards. */
+const cameraFor = (mobile: boolean) =>
+  mobile ? { ...CONFIG.camera, zoom: CONFIG.camera.zoom * 1.04, panY: 0.75 } : { ...CONFIG.camera, panX: CONFIG.camera.panX + 0.75, panY: CONFIG.camera.panY - 0.1 };
 
 /**
  * The particle stage and its scene. With `autoplay` it cycles through the scenes on its own;
  * without, each scene loops until something else picks the next one. `autoplay` can change at any
  * time without rebuilding the stage.
  */
-export function useFlowStage({ autoplay }: { autoplay: boolean }) {
+export function useFlowStage({ autoplay, arch = "cascaded" }: { autoplay: boolean; arch?: Arch }) {
   const box = useRef<HTMLDivElement>(null);
   const [stage, setStage] = useState<Stage | null>(null);
   // the cards wait for the stage, so the whole section fades in together
@@ -40,6 +43,11 @@ export function useFlowStage({ autoplay }: { autoplay: boolean }) {
   const [scene, setScene] = useState<SceneId>(CONFIG.scene);
   const mobile = useMobile();
   const style = useOrbStyle();
+  // the autoplay order follows the architecture; read from a ref so switching never rebuilds the stage
+  const order = useRef(orderFor(arch));
+  useEffect(() => {
+    order.current = orderFor(arch);
+  }, [arch]);
 
   useEffect(() => {
     let st: Stage | null = null;
@@ -58,8 +66,14 @@ export function useFlowStage({ autoplay }: { autoplay: boolean }) {
       };
     }
     setStage(st);
+    // for the console and screenshot scripts, as on /dev
+    if (process.env.NODE_ENV !== "production") (window as unknown as { stage: Stage }).stage = st;
     const offScene = st.on("scene", (id) => setScene(id));
-    const offLoop = st.on("loop", (id) => st.config.autoplay && st.applyConfig({ scene: SCENE_ORDER[(SCENE_ORDER.indexOf(id) + 1) % SCENE_ORDER.length] }));
+    const offLoop = st.on("loop", (id) => {
+      if (!st.config.autoplay) return;
+      const o = order.current;
+      st.applyConfig({ scene: o[(o.indexOf(id) + 1) % o.length] });
+    });
     return () => {
       alive = false;
       offScene();
@@ -81,7 +95,7 @@ export function useFlowStage({ autoplay }: { autoplay: boolean }) {
     [stage],
   );
 
-  return { box, stage, ready, scene, mobile, pickScene };
+  return { box, stage, ready, scene, mobile, pickScene, arch };
 }
 
 interface StageCardProps {
@@ -90,16 +104,29 @@ interface StageCardProps {
   stage: Stage | null;
   mobile: boolean;
   ready: boolean;
+  arch: Arch;
+  pickScene: (id: SceneId) => void;
   style?: CSSProperties;
 }
 
-/** The rounded stage card: the canvas (in `box`) with the scene cards over it. Takes useFlowStage's result. */
-export function StageCard({ box, scene, stage, mobile, ready, style }: StageCardProps) {
+/**
+ * The rounded stage card: the canvas (in `box`), the model tabs along its top and the model cards over
+ * it. On phones the cards drop below the card instead. Takes useFlowStage's result.
+ */
+export function StageCard({ box, scene, stage, mobile, ready, arch, pickScene, style }: StageCardProps) {
   return (
-    <div className="relative aspect-square overflow-hidden rounded-[32px] md:aspect-[876/678]" style={{ background: CONFIG.background, ...style }}>
-      <div ref={box} className="absolute inset-0" />
-      <SceneCards scene={scene} stage={stage} mobile={mobile} show={ready} />
-      <StylePicker className="absolute right-4 top-4" />
+    <div className="flex min-w-0 flex-col gap-6">
+      <div className="relative aspect-square overflow-hidden rounded-[32px] md:aspect-[876/678]" style={{ background: CONFIG.background, ...style }}>
+        <div ref={box} className="absolute inset-0" />
+        {!mobile && <ModelCards scene={scene} arch={arch} stage={stage} onScene={pickScene} show={ready} />}
+        <div className={`absolute inset-x-0 top-3 flex justify-center px-3 transition-opacity duration-700 md:top-4 ${ready ? "opacity-100" : "opacity-0"}`}>
+          <div className="max-w-full overflow-x-auto [scrollbar-width:none]">
+            <SceneTabs scene={scene} arch={arch} onScene={pickScene} />
+          </div>
+        </div>
+        <StylePicker className="absolute bottom-4 right-4" />
+      </div>
+      {mobile && <ModelCards scene={scene} arch={arch} stage={stage} onScene={pickScene} show={ready} mobile />}
     </div>
   );
 }

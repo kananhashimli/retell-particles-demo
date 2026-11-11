@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { SCENES, STEPS, type SceneId } from "@/lib/stage/types";
+import { SCENES, STEPS, stepScenes, type Arch, type SceneId } from "@/lib/stage/types";
 import { StepIcon } from "./icons";
 
 interface Props {
@@ -10,6 +10,7 @@ interface Props {
   /** returns 0..1 through the current loop; polled for the progress line */
   progress: () => number;
   autoplay: boolean;
+  arch?: Arch;
   /** false leaves out the response-time note, for tight spaces */
   note?: boolean;
 }
@@ -26,20 +27,26 @@ export function ResponseNote({ className = "" }: { className?: string }) {
   );
 }
 
-/** Listen / Think / Speak, as in the design: the open step shows its copy and sub-steps. */
-export function FlowTabs({ scene, onScene, progress, autoplay, note = true }: Props) {
+/**
+ * The three capability groups. The open one shows its description; the line under it fills as the
+ * group's models play. Picking a model inside a group happens in the tab bar on the stage.
+ */
+export function FlowTabs({ scene, onScene, progress, autoplay, arch = "cascaded", note = true }: Props) {
   const active = SCENES[scene].step;
   const bar = useRef<HTMLSpanElement>(null);
+  const ids = stepScenes(active, arch);
+  const index = Math.max(0, ids.indexOf(scene));
 
   useEffect(() => {
     let raf = 0;
     const tick = () => {
-      if (bar.current) bar.current.style.transform = `scaleY(${progress().toFixed(4)})`;
+      // across the whole group: each model is an equal share of the line
+      if (bar.current) bar.current.style.transform = `scaleX(${((index + progress()) / ids.length).toFixed(4)})`;
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [progress, scene]);
+  }, [progress, index, ids.length]);
 
   return (
     <div className="flex h-full flex-col">
@@ -47,10 +54,10 @@ export function FlowTabs({ scene, onScene, progress, autoplay, note = true }: Pr
         {STEPS.map((s, i) => {
           const open = s.id === active;
           return (
-            <div key={s.id} className={i > 0 ? "border-t border-line" : ""}>
+            <div key={s.id} className="relative">
               <button
                 type="button"
-                onClick={() => onScene(s.scenes[0])}
+                onClick={() => onScene(stepScenes(s.id, arch)[0])}
                 disabled={open}
                 className={`group flex w-full items-center gap-4 pb-4 text-left md:pb-5 ${open ? "cursor-default" : "cursor-pointer"} ${i > 0 ? "pt-5 md:pt-7" : ""}`}
                 aria-expanded={open}
@@ -66,38 +73,15 @@ export function FlowTabs({ scene, onScene, progress, autoplay, note = true }: Pr
               </button>
               <div className={`grid transition-[grid-template-rows] duration-500 ease-[cubic-bezier(.2,.7,.2,1)] ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
                 <div className="overflow-hidden" inert={!open}>
-                  <p className="max-w-[327px] pb-3 text-[14px] md:pb-4 leading-[19px] tracking-[-0.01em] text-black/50">{s.blurb}</p>
-                  <ul className="pb-3 md:pb-[17px]">
-                    {s.scenes.map((id) => {
-                      const on = id === scene;
-                      return (
-                        <li key={id}>
-                          <button
-                            type="button"
-                            onClick={() => onScene(id)}
-                            disabled={on}
-                            aria-current={on ? "step" : undefined}
-                            className={`relative flex w-full ${on ? "cursor-default" : "cursor-pointer"} items-baseline gap-3 py-1.5 pl-4 md:py-2 text-left text-[14px] leading-[19px] tracking-[-0.01em] transition-colors ${on ? "text-black" : "text-black/50 hover:text-black"}`}
-                          >
-                            <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] md:top-2 md:bottom-2 overflow-hidden rounded bg-line">
-                              {on && (
-                                <span
-                                  ref={bar}
-                                  className="absolute inset-0 origin-top bg-accent"
-                                  style={{ transform: "scaleY(0)", opacity: autoplay ? 1 : 0.45 }}
-                                />
-                              )}
-                            </span>
-                            <span className="whitespace-nowrap">{SCENES[id].title}</span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  <p className="max-w-[440px] pb-6 text-[14px] leading-[19px] tracking-[-0.01em] text-black/50 md:pb-8">{s.blurb}</p>
                 </div>
               </div>
-              {/* with the blurb shut, the icon sits 28px above the divider */}
-              <div className="h-2" />
+              {/* the divider; under the open group it is the progress line */}
+              {i < STEPS.length - 1 || open ? (
+                <span className="relative block h-px overflow-hidden bg-line">
+                  {open && <span ref={bar} className="absolute inset-0 origin-left bg-accent" style={{ transform: "scaleX(0)", opacity: autoplay ? 1 : 0.45 }} />}
+                </span>
+              ) : null}
             </div>
           );
         })}

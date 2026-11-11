@@ -104,3 +104,18 @@ body {
     animation: none;
   }
 }
+
+/* Connectors from the model cards to the orb: the dashes flow toward the orb */
+@keyframes connector-flow {
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+.connector-flow {
+  animation: connector-flow 0.9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .connector-flow {
+    animation: none;
+  }
+}

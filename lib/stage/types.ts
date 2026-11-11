@@ -5,24 +5,62 @@ import type { Kit } from "./kit";
 
 export type DirectionId = "line" | "particles";
 export type StepId = "listen" | "think" | "speak";
-export type SceneId = "denoise" | "turns" | "llm" | "flow" | "colloquial" | "voices";
+export type SceneId = "denoise" | "turns" | "ivr" | "llm" | "harness" | "flow" | "colloquial" | "guardrails" | "voices";
+/** Cascaded (STT → Tell-1 → TTS-style text pipeline) or speech-to-speech agents: same layout, different cards */
+export type Arch = "cascaded" | "s2s";
 
-export const STEPS: { id: StepId; title: string; blurb: string; scenes: SceneId[] }[] = [
-  { id: "listen", title: "Listen", blurb: "Hear the caller clearly. Clean audio. Natural timing. A conversation that starts with understanding.", scenes: ["denoise", "turns"] },
-  { id: "think", title: "Think", blurb: "Reason over the call in real time, and keep it moving toward the outcome that matters.", scenes: ["llm", "flow"] },
-  { id: "speak", title: "Speak", blurb: "Answer in a voice that sounds like a person on the phone, not a page being read aloud.", scenes: ["colloquial", "voices"] },
+/** The three capability groups on the right of the section (the brief's "sections"). */
+export const STEPS: { id: StepId; title: string; blurb: string; scenes: SceneId[]; s2s: SceneId[] }[] = [
+  {
+    id: "listen",
+    title: "Speech perception",
+    blurb: "Detect speech, recognize call conditions, and determine when to listen, wait, or respond.",
+    scenes: ["denoise", "turns", "ivr"],
+    s2s: ["denoise", "turns", "ivr"],
+  },
+  {
+    id: "think",
+    title: "Reasoning & orchestration",
+    blurb: "Bring together models, knowledge, and tools to move every conversation forward.",
+    scenes: ["llm", "harness"],
+    s2s: ["llm", "harness"],
+  },
+  {
+    id: "speak",
+    title: "Response generation",
+    blurb: "Deliver clear, natural responses shaped for live conversation.",
+    scenes: ["colloquial", "guardrails"],
+    // no required rewrite or guardrail stage is established for speech-to-speech: one neutral "spoken response" scene
+    s2s: ["colloquial"],
+  },
 ];
 
-export const SCENES: Record<SceneId, { step: StepId; title: string }> = {
-  denoise: { step: "listen", title: "Denoising" },
-  turns: { step: "listen", title: "Turn-taking" },
-  llm: { step: "think", title: "Retell LLM" },
-  flow: { step: "think", title: "Conversation flow" },
-  colloquial: { step: "speak", title: "Colloquial" },
-  voices: { step: "speak", title: "Retell voices" },
+/** `title` is the model card title, `tab` the short label in the stage's tab bar; `s2s` overrides both for speech-to-speech */
+export const SCENES: Record<SceneId, { step: StepId; title: string; tab: string; s2s?: { title: string; tab: string } }> = {
+  denoise: { step: "listen", title: "Denoising Model", tab: "Denoising" },
+  turns: { step: "listen", title: "Turn-Taking Model", tab: "Turn-taking" },
+  ivr: { step: "listen", title: "Voicemail & IVR Detection", tab: "Voicemail & IVR" },
+  llm: { step: "think", title: "Tell-1", tab: "Tell-1", s2s: { title: "Speech-to-speech model", tab: "Speech-to-speech" } },
+  harness: { step: "think", title: "Retell Agent Harness", tab: "Agent harness" },
+  flow: { step: "think", title: "Conversation flow", tab: "Flow" },
+  colloquial: { step: "speak", title: "Colloquial Rewrite Model", tab: "Colloquial rewrite", s2s: { title: "Spoken response", tab: "Spoken response" } },
+  guardrails: { step: "speak", title: "Response Guardrails", tab: "Guardrails" },
+  voices: { step: "speak", title: "Retell voices", tab: "Voices" },
 };
 
-export const SCENE_ORDER: SceneId[] = ["denoise", "turns", "llm", "flow", "colloquial", "voices"];
+/** the scenes a group plays, for an architecture */
+export const stepScenes = (step: StepId, arch: Arch = "cascaded") => {
+  const s = STEPS.find((x) => x.id === step)!;
+  return arch === "s2s" ? s.s2s : s.scenes;
+};
+/** every scene the section plays, in order */
+export const orderFor = (arch: Arch = "cascaded"): SceneId[] => STEPS.flatMap((s) => stepScenes(s.id, arch));
+export const sceneLabel = (id: SceneId, arch: Arch = "cascaded") => (arch === "s2s" && SCENES[id].s2s) || SCENES[id];
+
+/** the section's scenes (cascaded); "flow" and "voices" stay in the engine for the lab */
+export const SCENE_ORDER: SceneId[] = orderFor("cascaded");
+/** every scene the engine knows, for the lab */
+export const ALL_SCENES: SceneId[] = ["denoise", "turns", "ivr", "llm", "harness", "flow", "colloquial", "guardrails", "voices"];
 
 export interface StageConfig {
   direction: DirectionId;
