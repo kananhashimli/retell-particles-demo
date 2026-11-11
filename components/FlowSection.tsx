@@ -52,8 +52,8 @@ export function FlowSection() {
       <header>
         <div>
           <p className="text-[15px] text-muted">{EYEBROW}</p>
-          <h2 className="mt-6 max-w-[760px] font-serif text-[clamp(40px,5.2vw,72px)] leading-[0.98] tracking-[-0.02em] md:mt-8">{HEADLINE}</h2>
-          <p className="mt-6 max-w-[480px] text-[15px] leading-[1.4]">{DESCRIPTION}</p>
+          <h2 className="mt-6 max-w-[1100px] font-serif text-[clamp(40px,5.2vw,72px)] leading-[0.98] tracking-[-0.02em] md:mt-8">{HEADLINE}</h2>
+          <p className="mt-6 max-w-[368px] text-[15px] leading-[1.4]">{DESCRIPTION}</p>
         </div>
       </header>
       <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,876fr)_minmax(300px,456fr)] lg:gap-[60px]">

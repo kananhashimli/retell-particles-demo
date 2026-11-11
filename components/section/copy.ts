@@ -2,10 +2,10 @@ import type { HarnessPart } from "@/lib/stage/directions/harness";
 import type { SceneId } from "@/lib/stage/types";
 
 /** Section header, from the designer brief */
-export const EYEBROW = "Retell vCX Agent Harness";
-export const HEADLINE = "Purpose-built intelligence behind every conversation.";
+export const EYEBROW = "Retell vCX · Real-time orchestration";
+export const HEADLINE = "The intelligence behind every conversation.";
 export const DESCRIPTION =
-  "Retell brings together specialized models for turn-taking, context retrieval, reasoning, and response control. One coordinated agent harness, engineered for the demands of real-time conversation.";
+  "Retell real-time conversation stack brings together six purpose-built technologies that handle listening, thinking, and speaking on every call.";
 
 /** TODO: the Tell-1 evaluation link isn't supplied yet */
 export const TELL1_EVAL_URL = "#tell-1-evaluation";

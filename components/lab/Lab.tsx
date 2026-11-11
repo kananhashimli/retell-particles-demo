@@ -10,6 +10,7 @@ import { getOrbStyle, StylePicker, useOrbStyle } from "../StylePicker";
 import { FlowTabs } from "./FlowTabs";
 import { Panel } from "./Panel";
 import { ModelCards } from "../section/ModelCards";
+import { DESCRIPTION, EYEBROW, HEADLINE } from "../section/copy";
 import { DownloadIcon, PauseIcon, PlayIcon, SlidersIcon } from "./icons";
 
 const KEY = "retell-stage:v6";
@@ -379,9 +380,9 @@ export function Lab() {
         {/* the section, as designed */}
         <main className="min-w-0 flex-1">
           <section className="mx-auto max-w-[1512px] px-6 pb-24 pt-[72px] md:px-[60px]">
-            <p className="text-[15px] text-muted">Retell vCX Agent Harness</p>
-            <h2 className="mt-8 max-w-[680px] font-serif text-[clamp(44px,5.6vw,72px)] leading-[0.98] tracking-[-0.02em]">Purpose-built intelligence behind every conversation.</h2>
-            <p className="mt-6 max-w-[460px] text-[15px] leading-[1.4]">Retell brings together specialized models for turn-taking, context retrieval, reasoning, and response control. One coordinated agent harness, engineered for the demands of real-time conversation.</p>
+            <p className="text-[15px] text-muted">{EYEBROW}</p>
+            <h2 className="mt-8 max-w-[1100px] font-serif text-[clamp(44px,5.6vw,72px)] leading-[0.98] tracking-[-0.02em]">{HEADLINE}</h2>
+            <p className="mt-6 max-w-[368px] text-[15px] leading-[1.4]">{DESCRIPTION}</p>
 
             <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,876fr)_minmax(300px,456fr)] lg:gap-[60px]">
               <div className="relative aspect-[876/678] overflow-hidden rounded-[24px]" style={{ background: stage?.config.background ?? "#F5F5F8" }}>
