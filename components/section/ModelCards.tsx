@@ -120,11 +120,11 @@ function Card({ copy, unconfirmed = false, children }: { copy: CardCopy; unconfi
   return (
     <div
       className={`rounded-[20px] text-[14px] leading-[19px] tracking-[-0.01em] ${
-        unconfirmed ? "border border-dashed border-black/20 bg-[#F6F6F8]/85 text-black/55 backdrop-blur-[6px]" : `bg-white text-black ${SHADOW}`
+        `bg-white text-black ${SHADOW}`
       } px-4 py-4`}
     >
       <div className="flex gap-3">
-        <Icon name={copy.icon} className={`mt-[1px] ${unconfirmed ? "text-black/45" : "text-accent"}`} />
+        <Icon name={copy.icon} className="mt-[1px] text-accent" />
         <div className="min-w-0 flex-1">
           <p>{copy.title}</p>
           <p className="mt-1 text-[13px] leading-[18px] text-black/50">{copy.text}</p>
