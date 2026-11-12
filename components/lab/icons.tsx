@@ -31,6 +31,6 @@ export const PauseIcon = (p: SVGProps<SVGSVGElement>) => (
 );
 
 /** Icons from the Figma design, drawn as masks so they take the text colour. */
-export const StepIcon = ({ id, className = "" }: { id: "listen" | "think" | "speak"; className?: string }) => (
+export const StepIcon = ({ id, className = "" }: { id: "listen" | "think" | "speak" | "conversation"; className?: string }) => (
   <span aria-hidden className={`block size-5 bg-current ${className}`} style={{ mask: `url(/icons/${id}.svg) center / 20px 20px no-repeat` }} />
 );

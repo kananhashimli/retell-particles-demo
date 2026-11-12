@@ -9,10 +9,10 @@ export type SceneId = "denoise" | "turns" | "ivr" | "llm" | "s2s" | "harness" | 
 /** Cascaded (STT → Tell-1 → TTS-style text pipeline) or speech-to-speech agents: same layout, different cards */
 export type Arch = "cascaded" | "s2s";
 
-/** A capability group on the right of the section (the brief's "sections"). `icon` picks its step icon. */
+/** A capability group on the right of the section (the brief's "sections"). `icon` names an svg in /public/icons. */
 export interface Group {
   id: string;
-  icon: StepId;
+  icon: StepId | "conversation";
   title: string;
   blurb: string;
   scenes: SceneId[];
@@ -47,7 +47,8 @@ export const STEPS: (Group & { id: StepId })[] = [
 export const S2S_GROUPS: Group[] = [
   {
     id: "semantic",
-    icon: "listen",
+    // hears and talks: a conversation, not just an ear
+    icon: "conversation",
     title: "Semantic perception & generation",
     blurb:
       "Handles interruptions, turn-taking, and backchannels in real time. Understands emotion and semantic meaning, then responds with context-aware, human-like speech. Retell duplex model coming soon.",

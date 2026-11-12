@@ -1,0 +1,16 @@
+<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+<!-- used as a css mask: the bubble's fill is cut out of the ear (instead of painted black) so its inside shows the tile -->
+<defs>
+<mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20">
+<rect width="20" height="20" fill="white"/>
+<path d="M12 18C9.23858 18 7 15.7614 7 13C7 10.2386 9.23858 8 12 8C14.7614 8 17 10.2386 17 13C17 13.7041 16.9138 14.3476 16.6743 14.9449C16.3065 15.8618 16.3779 16.6443 17 17.4737C16.2834 17.8234 15.1579 17.7368 14.6316 17.2487C13.8667 17.7236 12.9665 18 12 18Z" fill="black"/>
+</mask>
+</defs>
+<g mask="url(#cut)">
+<path d="M2.50661 13.2411C2.50661 14.7931 3.31391 16.0513 4.77644 16.0513C6.23898 16.0513 7.42456 14.9975 7.8029 13.2411C7.9843 12.3989 8.35596 11.8898 8.93782 11.4847C10.451 10.4308 11.5859 8.80949 11.5859 6.91797C11.5859 4.20185 9.38409 2 6.66797 2C3.95185 2 1.75 4.20185 1.75 6.91797" stroke-width="1.66667" stroke-linecap="round" stroke-linejoin="round" stroke="white"/>
+<path d="M4.75 9C5.4425 9 6.0039 8.55227 6.0039 8C6.0039 7.44773 5.4425 7 4.75 7C4.75 6.1036 4.98192 5 6.2547 5C7.1499 5 7.6748 5.54407 7.75 6.33333" stroke-width="1.66667" stroke-linecap="round" stroke-linejoin="round" stroke="white"/>
+</g>
+<path d="M12 18C9.23858 18 7 15.7614 7 13C7 10.2386 9.23858 8 12 8C14.7614 8 17 10.2386 17 13C17 13.7041 16.9138 14.3476 16.6743 14.9449C16.3065 15.8618 16.3779 16.6443 17 17.4737C16.2834 17.8234 15.1579 17.7368 14.6316 17.2487C13.8667 17.7236 12.9665 18 12 18Z" stroke-width="1.58728" stroke-linecap="round" stroke-linejoin="round" stroke="white"/>
+<path d="M10.5 11.5H13.5" stroke-width="1.66667" stroke-linecap="round" stroke-linejoin="round" stroke="white"/>
+<path d="M10.5 14H11.5" stroke-width="1.66667" stroke-linecap="round" stroke-linejoin="round" stroke="white"/>
+</svg>
