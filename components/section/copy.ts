@@ -33,18 +33,13 @@ export const CARDS: Partial<Record<SceneId, CardCopy>> = {
   guardrails: { title: "Response Guardrails", text: "Checks generated responses against configured constraints.", icon: "guardrails" },
 };
 
-/**
- * Speech-to-speech core model. The brief asks for "a speech-to-speech model option" but gives no copy:
- * placeholder until marketing supplies it.
- */
-export const S2S_CORE: CardCopy = {
-  title: "Speech-to-speech model",
-  text: "Hears and replies in audio directly, with the agent harness supplying context, tools, and flow.",
-  icon: "voices",
+/** Speech-to-speech (duplex) cards, from the client's feedback; the agent harness card is shared */
+export const S2S_CARDS: Partial<Record<SceneId, CardCopy>> = {
+  turns: { title: "Conversation dynamics", text: "Handles interruptions, turn-taking, and backchannels as they happen.", icon: "turns" },
+  denoise: { title: "Emotion and meaning", text: "Understands emotion and intent directly from the caller’s voice.", icon: "listening" },
+  colloquial: { title: "Expressive speech", text: "Responds with context-aware, human-like delivery.", icon: "voices" },
+  s2s: { title: "Reasoning model", text: "Handles complex reasoning and tool use while the conversation keeps flowing.", icon: "llm" },
 };
-export const S2S_TELL1_NOTE = "Tell-1 is the text LLM option for cascaded agents.";
-/** response controls aren't confirmed for speech-to-speech: shown, but not as active */
-export const S2S_UNCONFIRMED = "Availability to confirm";
 
 export const HARNESS_COPY: Record<HarnessPart, CardCopy> = {
   query: { title: "Query Refinement Model", text: "Turns conversation context into focused knowledge-base searches.", icon: "query" },

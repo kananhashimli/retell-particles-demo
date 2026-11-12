@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Stage } from "@/lib/stage/stage";
 import { HARNESS_PARTS, harnessActivity } from "@/lib/stage/directions/harness";
-import { SCENES, type Arch, type SceneId } from "@/lib/stage/types";
-import { CARDS, HARNESS_COPY, RETRIEVAL_DETAIL, S2S_CORE, S2S_TELL1_NOTE, S2S_UNCONFIRMED, TELL1_CTA, TELL1_EVAL_URL, type CardCopy } from "./copy";
+import type { Arch, SceneId } from "@/lib/stage/types";
+import { CARDS, HARNESS_COPY, RETRIEVAL_DETAIL, S2S_CARDS, TELL1_CTA, TELL1_EVAL_URL, type CardCopy } from "./copy";
 
 // the stage as drawn: 876 × 678, the orb in the middle; the card sits in the top-left corner, 24px in
 const W = 876;
@@ -87,36 +87,23 @@ export function ModelCards({ scene, arch, stage, mobile = false, show = true }: 
 
 /** What the open tab shows. */
 function SceneCard({ scene, arch, reg }: { scene: SceneId; arch: Arch; reg: (key: string) => (el: HTMLElement | null) => void }) {
-  const s2s = arch === "s2s";
   if (scene === "harness") return <Harness reg={reg} />;
-  if (scene === "llm" || scene === "s2s") {
+  if (arch === "s2s" && S2S_CARDS[scene]) return <Card copy={S2S_CARDS[scene]!} />;
+  if (scene === "llm") {
     return (
-      <Card copy={s2s ? S2S_CORE : CARDS.llm!}>
-        {s2s ? (
-          <p className="mt-2 text-[12px] leading-[16px] text-black/40">{S2S_TELL1_NOTE}</p>
-        ) : (
-          <a href={TELL1_EVAL_URL} className="mt-2.5 inline-flex items-center gap-1 text-[13px] leading-[18px] text-accent hover:underline">
-            {TELL1_CTA}
-            <span aria-hidden>→</span>
-          </a>
-        )}
+      <Card copy={CARDS.llm!}>
+        <a href={TELL1_EVAL_URL} className="mt-2.5 inline-flex items-center gap-1 text-[13px] leading-[18px] text-accent hover:underline">
+          {TELL1_CTA}
+          <span aria-hidden>→</span>
+        </a>
       </Card>
-    );
-  }
-  // speech-to-speech "Spoken response": the response controls, shown but not as active until confirmed
-  if (s2s && SCENES[scene].step === "speak") {
-    return (
-      <>
-        <Card copy={CARDS.colloquial!} unconfirmed />
-        <Card copy={CARDS.guardrails!} unconfirmed />
-      </>
     );
   }
   return <Card copy={CARDS[scene]!} />;
 }
 
 /** A model card. */
-function Card({ copy, unconfirmed = false, children }: { copy: CardCopy; unconfirmed?: boolean; children?: ReactNode }) {
+function Card({ copy, children }: { copy: CardCopy; children?: ReactNode }) {
   return (
     <div
       className={`rounded-[20px] text-[14px] leading-[19px] tracking-[-0.01em] ${
@@ -128,7 +115,6 @@ function Card({ copy, unconfirmed = false, children }: { copy: CardCopy; unconfi
         <div className="min-w-0 flex-1">
           <p>{copy.title}</p>
           <p className="mt-1 text-[13px] leading-[18px] text-black/50">{copy.text}</p>
-          {unconfirmed && <p className="mt-2 inline-block rounded-full border border-black/15 px-2 py-0.5 text-[11px] leading-[14px] text-black/50">{S2S_UNCONFIRMED}</p>}
           {children}
         </div>
       </div>

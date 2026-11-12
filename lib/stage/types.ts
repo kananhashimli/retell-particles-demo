@@ -50,9 +50,9 @@ export const S2S_GROUPS: Group[] = [
     icon: "listen",
     title: "Semantic perception & generation",
     blurb:
-      "Handles interruptions, turn-taking, and backchannels in real time. Understands emotion and semantic meaning, then responds with context-aware, human-like speech.",
-    // no required rewrite or guardrail stage is established for speech-to-speech: one neutral "spoken response" scene
-    scenes: ["denoise", "turns", "ivr", "colloquial"],
+      "Handles interruptions, turn-taking, and backchannels in real time. Understands emotion and semantic meaning, then responds with context-aware, human-like speech. Retell duplex model coming soon.",
+    // three capabilities of the one model, each shown with the closest scene: turn-taking, a voice heard clearly, a reply
+    scenes: ["turns", "denoise", "colloquial"],
   },
   {
     id: "think",
@@ -66,14 +66,14 @@ export const S2S_GROUPS: Group[] = [
 
 /** `title` is the model card title, `tab` the short label in the stage's tab bar; `s2s` overrides both for speech-to-speech */
 export const SCENES: Record<SceneId, { step: StepId; title: string; tab: string; s2s?: { title: string; tab: string } }> = {
-  denoise: { step: "listen", title: "Denoising Model", tab: "Denoising" },
-  turns: { step: "listen", title: "Turn-Taking Model", tab: "Turn-taking" },
+  denoise: { step: "listen", title: "Denoising Model", tab: "Denoising", s2s: { title: "Emotion and meaning", tab: "Emotion and meaning" } },
+  turns: { step: "listen", title: "Turn-Taking Model", tab: "Turn-taking", s2s: { title: "Conversation dynamics", tab: "Conversation dynamics" } },
   ivr: { step: "listen", title: "Voicemail & IVR Detection", tab: "Voicemail & IVR" },
   llm: { step: "think", title: "Tell-1", tab: "Tell-1" },
-  s2s: { step: "think", title: "Speech-to-speech model", tab: "Speech-to-speech" },
+  s2s: { step: "think", title: "Reasoning model", tab: "Reasoning model" },
   harness: { step: "think", title: "Retell Agent Harness", tab: "Agent harness" },
   flow: { step: "think", title: "Conversation flow", tab: "Flow" },
-  colloquial: { step: "speak", title: "Colloquial Rewrite Model", tab: "Colloquial rewrite", s2s: { title: "Spoken response", tab: "Spoken response" } },
+  colloquial: { step: "speak", title: "Colloquial Rewrite Model", tab: "Colloquial rewrite", s2s: { title: "Expressive speech", tab: "Expressive speech" } },
   guardrails: { step: "speak", title: "Response Guardrails", tab: "Guardrails" },
   voices: { step: "speak", title: "Retell voices", tab: "Voices" },
 };
