@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { sceneLabel, SCENES, STEPS, stepScenes, type Arch, type SceneId } from "@/lib/stage/types";
+import { groupOf, groupsFor, sceneLabel, type Arch, type SceneId } from "@/lib/stage/types";
 import { StepIcon } from "./icons";
 
 interface Props {
@@ -29,7 +29,7 @@ export function ResponseNote({ className = "" }: { className?: string }) {
 
 /** The three capability groups. The open one shows its description and its models; the line beside the playing model fills as it plays. */
 export function FlowTabs({ scene, onScene, progress, autoplay, arch = "cascaded", note = true }: Props) {
-  const active = SCENES[scene].step;
+  const active = groupOf(scene, arch)?.id;
   const bar = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
@@ -45,9 +45,9 @@ export function FlowTabs({ scene, onScene, progress, autoplay, arch = "cascaded"
   return (
     <div className="flex h-full flex-col">
       <div>
-        {STEPS.map((s, i) => {
+        {groupsFor(arch).map((s, i) => {
           const open = s.id === active;
-          const ids = stepScenes(s.id, arch);
+          const ids = s.scenes;
           return (
             <div key={s.id} className={i > 0 ? "border-t border-line" : ""}>
               <button
@@ -62,7 +62,7 @@ export function FlowTabs({ scene, onScene, progress, autoplay, arch = "cascaded"
                     open ? "border-accent bg-accent text-white" : "border-line bg-white text-black group-hover:border-ink/20"
                   }`}
                 >
-                  <StepIcon id={s.id} />
+                  <StepIcon id={s.icon} />
                 </span>
                 <span className="text-[16px] leading-[19px] tracking-[-0.01em]">{s.title}</span>
               </button>

@@ -9,30 +9,58 @@ export type SceneId = "denoise" | "turns" | "ivr" | "llm" | "s2s" | "harness" | 
 /** Cascaded (STT → Tell-1 → TTS-style text pipeline) or speech-to-speech agents: same layout, different cards */
 export type Arch = "cascaded" | "s2s";
 
-/** The three capability groups on the right of the section (the brief's "sections"). */
-export const STEPS: { id: StepId; title: string; blurb: string; scenes: SceneId[]; s2s: SceneId[] }[] = [
+/** A capability group on the right of the section (the brief's "sections"). `icon` picks its step icon. */
+export interface Group {
+  id: string;
+  icon: StepId;
+  title: string;
+  blurb: string;
+  scenes: SceneId[];
+}
+
+/** Cascaded: the three capability groups. */
+export const STEPS: (Group & { id: StepId })[] = [
   {
     id: "listen",
+    icon: "listen",
     title: "Speech perception",
     blurb: "Detect speech, recognize call conditions, and determine when to listen, wait, or respond.",
     scenes: ["denoise", "turns", "ivr"],
-    s2s: ["denoise", "turns", "ivr"],
   },
   {
     id: "think",
+    icon: "think",
     title: "Reasoning & orchestration",
     blurb: "Bring together models, knowledge, and tools to move every conversation forward.",
     scenes: ["llm", "harness"],
-    // speech-to-speech has its own scene in Tell-1's place: one unbroken stream instead of a text pipeline
-    s2s: ["s2s", "harness"],
   },
   {
     id: "speak",
+    icon: "speak",
     title: "Response generation",
     blurb: "Deliver clear, natural responses shaped for live conversation.",
     scenes: ["colloquial", "guardrails"],
+  },
+];
+
+/** Duplex (speech-to-speech): perception and generation are one group, since one model hears and speaks. */
+export const S2S_GROUPS: Group[] = [
+  {
+    id: "semantic",
+    icon: "listen",
+    title: "Semantic perception & generation",
+    blurb:
+      "Handles interruptions, turn-taking, and backchannels in real time. Understands emotion and semantic meaning, then responds with context-aware, human-like speech.",
     // no required rewrite or guardrail stage is established for speech-to-speech: one neutral "spoken response" scene
-    s2s: ["colloquial"],
+    scenes: ["denoise", "turns", "ivr", "colloquial"],
+  },
+  {
+    id: "think",
+    icon: "think",
+    title: "Reasoning & orchestration",
+    blurb: "Bring together models, knowledge, and tools to move every conversation forward.",
+    // speech-to-speech has its own scene in Tell-1's place: one unbroken stream instead of a text pipeline
+    scenes: ["s2s", "harness"],
   },
 ];
 
@@ -50,13 +78,17 @@ export const SCENES: Record<SceneId, { step: StepId; title: string; tab: string;
   voices: { step: "speak", title: "Retell voices", tab: "Voices" },
 };
 
-/** the scenes a group plays, for an architecture */
-export const stepScenes = (step: StepId, arch: Arch = "cascaded") => {
-  const s = STEPS.find((x) => x.id === step)!;
-  return arch === "s2s" ? s.s2s : s.scenes;
-};
+/** the groups shown, for an architecture */
+export const groupsFor = (arch: Arch = "cascaded"): Group[] => (arch === "s2s" ? S2S_GROUPS : STEPS);
+/** the group a scene plays in, for an architecture */
+export const groupOf = (scene: SceneId, arch: Arch = "cascaded") => groupsFor(arch).find((g) => g.scenes.includes(scene));
 /** every scene the section plays, in order */
-export const orderFor = (arch: Arch = "cascaded"): SceneId[] => STEPS.flatMap((s) => stepScenes(s.id, arch));
+export const orderFor = (arch: Arch = "cascaded"): SceneId[] => groupsFor(arch).flatMap((g) => g.scenes);
+/** the scene to show after switching architecture: the same one if it plays there, else the first with the same role */
+export const sceneIn = (scene: SceneId, arch: Arch): SceneId => {
+  const order = orderFor(arch);
+  return order.includes(scene) ? scene : order.find((id) => SCENES[id].step === SCENES[scene].step) ?? order[0];
+};
 export const sceneLabel = (id: SceneId, arch: Arch = "cascaded") => (arch === "s2s" && SCENES[id].s2s) || SCENES[id];
 
 /** the section's scenes (cascaded); "flow" and "voices" stay in the engine for the lab */

@@ -7,7 +7,9 @@ particle scene per model in three capability groups —
 Scenes play on their own and morph into one another. The groups sit on the right; the models of the
 open group are tabs along the top of the stage, and the model cards on the left of the stage show
 every group (the open one with descriptions, the others muted). A Cascaded / Speech-to-speech toggle
-switches the core model and marks the response controls as unconfirmed for speech-to-speech.
+switches the core model and marks the response controls as unconfirmed for speech-to-speech. Under
+speech-to-speech the groups become two: **Semantic perception & generation** (Denoising, Turn-taking,
+Voicemail & IVR detection, Spoken response) and **Reasoning & orchestration** (Speech-to-speech, Agent harness).
 
 - `/` – the section as it will ship: scenes play on their own.
 - `/scroll` – the same section driven by scrolling: it stays on screen while the page scrolls past,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { orderFor, SCENES, stepScenes, type Arch } from "@/lib/stage/types";
+import { sceneIn, type Arch } from "@/lib/stage/types";
 import { FlowTabs } from "./lab/FlowTabs";
 import { DESCRIPTION, EYEBROW, HEADLINE } from "./section/copy";
 import { StageCard, useFlowStage } from "./useFlowStage";
@@ -44,7 +44,8 @@ export function FlowSection() {
   const switchArch = (a: Arch) => {
     setArch(a);
     // a scene the other architecture doesn't play (guardrails, for speech-to-speech) hands over to its group's first
-    if (!orderFor(a).includes(flow.scene)) flow.pickScene(stepScenes(SCENES[flow.scene].step, a)[0]);
+    const next = sceneIn(flow.scene, a);
+    if (next !== flow.scene) flow.pickScene(next);
   };
 
   return (
